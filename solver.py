@@ -226,8 +226,10 @@ def dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,opti
 	size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
 	np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
 	hyperparam = model.get_hyperparams()
+	print(size_each_epoch)
 
 	for epoch in range(n_epochs):
+		print(size_each_epoch[epoch])
 		# Create new autoencoder with corresponding bottleneck size.
 		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
 		if epoch == 0:
@@ -271,6 +273,7 @@ def dev_train_vali_converge(model, size_ls, manner, train_loader, vali_loader, o
 		train_loss_old = float('inf')
 
 		while not converged:
+			print(new_n_hidden_ls[-1])
 			if epoch == 0:
 				ae = Autoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
 			else:
@@ -287,11 +290,20 @@ def dev_train_vali_converge(model, size_ls, manner, train_loader, vali_loader, o
 			torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
 
 			# Check for convergence
-			if train_loss < train_loss_old * 0.95:
-				train_loss_old = train_loss
-				epoch += 1
+			if new_n_hidden_ls[-1] == size_ls[-1]:
+				if train_loss < train_loss_old * 0.999:
+					epoch += 1
+					train_loss_old = train_loss
+				else:
+					epoch += 1
+					converged = True
 			else:
-				converged = True
+				if train_loss < train_loss_old * 0.99:
+					epoch += 1
+					train_loss_old = train_loss
+				else:
+					epoch += 1
+					converged = True
 
 	np.save(save_path + 'all_train_losses.npy', all_train_losses)
 	return train_losses, vali_losses
