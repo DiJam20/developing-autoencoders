@@ -19,16 +19,19 @@ class Autoencoder(nn.Module):
 
 		for i in range(n_layers):
 			if i == 0:
-				self.encoder.add_module('encoder_{}'.format(i+1),nn.Linear(n_input,n_hidden_ls[i]))
+				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_input,n_hidden_ls[i]))
 			else:
-				self.encoder.add_module('encoder_{}'.format(i+1),nn.Linear(n_hidden_ls[i-1],n_hidden_ls[i]))
+				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_hidden_ls[i-1],n_hidden_ls[i]))
+			self.encoder.add_module(f'activation_{i+1}', nn.ReLU())
 				
 		n_hidden_ls_reversed = n_hidden_ls[::-1]
 		for j in range(n_layers):
 			if j == n_layers-1:
-				self.decoder.add_module('decoder_{}'.format(j+1),nn.Linear(n_hidden_ls_reversed[j],n_input))
+				self.decoder.add_module(f'decoder_{j+1}',nn.Linear(n_hidden_ls_reversed[j],n_input))
 			else:
-				self.decoder.add_module('decoder_{}'.format(j+1),nn.Linear(n_hidden_ls_reversed[j],n_hidden_ls_reversed[j+1]))
+				self.decoder.add_module(f'decoder_{j+1}',nn.Linear(n_hidden_ls_reversed[j],n_hidden_ls_reversed[j+1]))
+			if j < n_layers - 1:
+				self.decoder.add_module(f'activation_{j+1}', nn.ReLU())
 		
 	## forward propagation
 	def forward(self,x):
