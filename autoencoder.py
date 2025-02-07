@@ -7,10 +7,10 @@ from torch.autograd import Variable
 
 
 ## define the autoencoder
-class Autoencoder(nn.Module):
+class LinearAutoencoder(nn.Module):
 	## initialization
 	def __init__(self,n_input,n_hidden_ls,n_layers):
-		super(Autoencoder,self).__init__()
+		super(LinearAutoencoder,self).__init__()
 		self.n_input = n_input
 		self.n_hidden_ls = n_hidden_ls
 		self.n_layers = n_layers
@@ -22,7 +22,54 @@ class Autoencoder(nn.Module):
 				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_input,n_hidden_ls[i]))
 			else:
 				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_hidden_ls[i-1],n_hidden_ls[i]))
-			self.encoder.add_module(f'activation_{i+1}', nn.ReLU())
+				
+		n_hidden_ls_reversed = n_hidden_ls[::-1]
+		for j in range(n_layers):
+			if j == n_layers-1:
+				self.decoder.add_module(f'decoder_{j+1}',nn.Linear(n_hidden_ls_reversed[j],n_input))
+			else:
+				self.decoder.add_module(f'decoder_{j+1}',nn.Linear(n_hidden_ls_reversed[j],n_hidden_ls_reversed[j+1]))
+		
+	## forward propagation
+	def forward(self,x):
+		encoded = self.encoder(x)
+		decoded = self.decoder(encoded)
+		return encoded, decoded
+	
+	def encode(self,x):
+		encoded = self.encoder(x)
+		return encoded
+	
+	def decode(self,x):
+		decoded = self.decoder(x)
+		return decoded
+	
+	def get_hyperparams(self):
+		params = {
+			'n_input': self.n_input,
+			'n_hidden_ls': self.n_hidden_ls,
+			'n_layers': self.n_layers
+		}
+		return params
+
+class NonLinearAutoencoder(nn.Module):
+	## initialization
+	def __init__(self,n_input,n_hidden_ls,n_layers):
+		super(NonLinearAutoencoder,self).__init__()
+		self.n_input = n_input
+		self.n_hidden_ls = n_hidden_ls
+		self.n_layers = n_layers
+		self.encoder = nn.Sequential()
+		self.decoder = nn.Sequential()
+
+		for i in range(n_layers):
+			if i == 0:
+				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_input,n_hidden_ls[i]))
+			else:
+				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_hidden_ls[i-1],n_hidden_ls[i]))
+			# If no ReLU wanted after before the bottleneck layer, comment out the following line
+			# if i != 2:
+			# 	self.encoder.add_module(f'activation_{i+1}', nn.ReLU())
 				
 		n_hidden_ls_reversed = n_hidden_ls[::-1]
 		for j in range(n_layers):
