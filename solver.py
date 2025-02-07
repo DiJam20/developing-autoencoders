@@ -9,7 +9,7 @@ import argparse
 import time
 from tqdm import tqdm
 
-from autoencoder import Autoencoder
+from autoencoder import LinearAutoencoder, NonLinearAutoencoder
 
 
 
@@ -174,11 +174,47 @@ def cut_dec_tensor(tensor):
     cut_number = np.ceil(tensor.shape[1] * 0.1)
     return tensor[:, :-int(cut_number)].clone()  # Klonen, weil sich sonst der "stride" nicht ändert! (Technischer stuff)
 
-def develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
+def l_develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
 	new_size = new_n_hidden_ls[-1]
 	# Create new autoencoder with corresponding bottleneck size.
 	n_layers = hyperparam['n_layers']
-	autoencoder = Autoencoder(hyperparam['n_input'],new_n_hidden_ls,n_layers)
+	autoencoder = LinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,n_layers)
+
+	# Load the weights learned in the last epoch.
+	state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
+	num_weights = state_dict["encoder.encoder_{}.weight".format(n_layers)].size(1)  
+	# Use different manners to determine the new weights.
+	if manner == 'naiv':
+		new_weights_encoder = torch.randn(new_size, num_weights)
+		new_bias_encoder = torch.randn(new_size)
+		new_weights_decoder = torch.randn(num_weights, new_size)
+	elif manner == 'cell_division':
+		# In the following three lines, a part of the new, randomly initialized, weights get assigned
+		# to the weights that were learned in the last epoch.
+		new_weights_encoder = divide_enc_tensor(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size)
+		new_bias_encoder = divide_latent_tensor(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size)
+		new_weights_decoder = divide_latent_tensor(state_dict["decoder.decoder_1.weight"], new_size)
+		
+	# Use the new weights to update the state_dict.
+	state_dict["encoder.encoder_{}.weight".format(n_layers)] = \
+		set_old_weights(new_weights_encoder, state_dict["encoder.encoder_{}.weight".format(n_layers)])
+	state_dict["encoder.encoder_{}.bias".format(n_layers)] = \
+		set_old_weights(new_bias_encoder, state_dict["encoder.encoder_{}.bias".format(n_layers)])
+	state_dict["decoder.decoder_1.weight"] = \
+		set_old_weights(new_weights_decoder, state_dict["decoder.decoder_1.weight"])
+	# use new state_dict to update model weights
+	print('debug nan in encoder weights',torch.isnan(state_dict["encoder.encoder_{}.weight".format(n_layers)]).sum())
+	print('debug nan in encoder bias',torch.isnan(state_dict["encoder.encoder_{}.bias".format(n_layers)]).sum())
+	print('debug nan in decoder weights',torch.isnan(state_dict["decoder.decoder_1.weight"]).sum())
+	autoencoder.load_state_dict(state_dict)
+
+	return autoencoder
+
+def nl_develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
+	new_size = new_n_hidden_ls[-1]
+	# Create new autoencoder with corresponding bottleneck size.
+	n_layers = hyperparam['n_layers']
+	autoencoder = NonLinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,n_layers)
 
 	# Load the weights learned in the last epoch.
 	state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
@@ -211,9 +247,7 @@ def develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
 	return autoencoder
 		
 
-
-
-def dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
+def l_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
 	if save_path is None:
 		save_path = './'
 	else:
@@ -233,10 +267,10 @@ def dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,opti
 		# Create new autoencoder with corresponding bottleneck size.
 		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
 		if epoch == 0:
-			ae =Autoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
+			ae =LinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
 
 		else:
-			ae = develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
+			ae = l_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
 			optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
 			
 		train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
@@ -252,8 +286,7 @@ def dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,opti
 	print('All train losses saved.')
 	return train_losses, vali_losses
 
-
-def dev_train_vali_converge(model, size_ls, manner, train_loader, vali_loader, optimizer, device, save_path=None):
+def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
 	if save_path is None:
 		save_path = './'
 	else:
@@ -263,52 +296,89 @@ def dev_train_vali_converge(model, size_ls, manner, train_loader, vali_loader, o
 	train_losses = []
 	all_train_losses = []
 	vali_losses = []
+	size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
+	np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
 	hyperparam = model.get_hyperparams()
-	epoch = 0
-	
-	for size in size_ls:
-		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1], size)
-		
-		converged = False
-		train_loss_old = float('inf')
+	print(size_each_epoch)
 
-		while not converged:
-			print(new_n_hidden_ls[-1])
-			if epoch == 0:
-				ae = Autoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
-			else:
-				ae = develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
-				optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+	for epoch in range(n_epochs):
+		print(size_each_epoch[epoch])
+		# Create new autoencoder with corresponding bottleneck size.
+		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
+		if epoch == 0:
+			ae =NonLinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
 
-			train_loss, train_loss_per_batch = train(ae, train_loader, optimizer, epoch, device)
-			vali_loss, _, _ = test(ae, vali_loader, device)
-			train_losses.append(train_loss)
-			all_train_losses.append(train_loss_per_batch)
-			vali_losses.append(vali_loss)
+		else:
+			ae = nl_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
+			optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
+			
+		train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
+		vali_loss,_,_ = test(ae,vali_loader,device)
+		train_losses.append(train_loss)
+		all_train_losses.append(train_loss_per_batch)
+		vali_losses.append(vali_loss)
 
-			# Save the weights of the current epoch.
-			torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-
-			# Check for convergence
-			if new_n_hidden_ls[-1] == size_ls[-1]:
-				if train_loss < train_loss_old * 0.999:
-					epoch += 1
-					train_loss_old = train_loss
-				else:
-					epoch += 1
-					converged = True
-			else:
-				if train_loss < train_loss_old * 0.99:
-					epoch += 1
-					train_loss_old = train_loss
-				else:
-					epoch += 1
-					converged = True
-
-	np.save(save_path + 'all_train_losses.npy', all_train_losses)
+		# Save the weights of the last epoch.
+		torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+		print('Weights saved.')
+	np.save(save_path + 'all_train_losses.npy',all_train_losses)
+	print('All train losses saved.')
 	return train_losses, vali_losses
 
+# def dev_train_vali_converge(model, size_ls, manner, train_loader, vali_loader, optimizer, device, save_path=None):
+# 	if save_path is None:
+# 		save_path = './'
+# 	else:
+# 		if not os.path.exists(save_path):
+# 			os.makedirs(save_path)
+# 			print('Directory created:', save_path)
+# 	train_losses = []
+# 	all_train_losses = []
+# 	vali_losses = []
+# 	hyperparam = model.get_hyperparams()
+# 	epoch = 0
+	
+# 	for size in size_ls:
+# 		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1], size)
+		
+# 		converged = False
+# 		train_loss_old = float('inf')
 
+# 		while not converged:
+# 			print(new_n_hidden_ls[-1])
+# 			if epoch == 0:
+# 				ae = LinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
+# 			else:
+# 				ae = develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
+# 				optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+
+# 			train_loss, train_loss_per_batch = train(ae, train_loader, optimizer, epoch, device)
+# 			vali_loss, _, _ = test(ae, vali_loader, device)
+# 			train_losses.append(train_loss)
+# 			all_train_losses.append(train_loss_per_batch)
+# 			vali_losses.append(vali_loss)
+
+# 			# Save the weights of the current epoch.
+# 			torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+
+# 			# Check for convergence
+# 			if new_n_hidden_ls[-1] == size_ls[-1]:
+# 				if train_loss < train_loss_old * 0.999:
+# 					epoch += 1
+# 					train_loss_old = train_loss
+# 				else:
+# 					epoch += 1
+# 					converged = True
+# 			else:
+# 				if train_loss < train_loss_old * 0.99:
+# 					epoch += 1
+# 					train_loss_old = train_loss
+# 				else:
+# 					epoch += 1
+# 					converged = True
+
+# 	np.save(save_path + 'all_train_losses.npy', all_train_losses)
+# 	return train_losses, vali_losses
 
 
 ## define the testing function
