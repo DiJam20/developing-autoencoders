@@ -67,6 +67,7 @@ class NonLinearAutoencoder(nn.Module):
 				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_input,n_hidden_ls[i]))
 			else:
 				self.encoder.add_module(f'encoder_{i+1}',nn.Linear(n_hidden_ls[i-1],n_hidden_ls[i]))
+			self.encoder.add_module(f'activation_{i+1}', nn.ReLU())
 			# If no ReLU wanted after before the bottleneck layer, comment out the following line
 			# if i != 2:
 			# 	self.encoder.add_module(f'activation_{i+1}', nn.ReLU())
