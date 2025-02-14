@@ -71,6 +71,9 @@ class NonLinearAutoencoder(nn.Module):
 			# If no ReLU wanted after before the bottleneck layer, comment out the following line
 			# if i != 2:
 			# 	self.encoder.add_module(f'activation_{i+1}', nn.ReLU())
+			# Add dropout layer after each hidden layer, but no dropout on the bottleneck layer
+			# if i < n_layers - 1:
+			# 	self.encoder.add_module(f'dropout_{i+1}', nn.Dropout(p=0.2))
 				
 		n_hidden_ls_reversed = n_hidden_ls[::-1]
 		for j in range(n_layers):
@@ -78,13 +81,35 @@ class NonLinearAutoencoder(nn.Module):
 				self.decoder.add_module(f'decoder_{j+1}',nn.Linear(n_hidden_ls_reversed[j],n_input))
 			else:
 				self.decoder.add_module(f'decoder_{j+1}',nn.Linear(n_hidden_ls_reversed[j],n_hidden_ls_reversed[j+1]))
-			if j < n_layers - 1:
 				self.decoder.add_module(f'activation_{j+1}', nn.ReLU())
+				# self.decoder.add_module(f'dropout_{j+1}', nn.Dropout(p=0.2))
 		
 	## forward propagation
-	def forward(self,x):
+	def forward(self, x, return_activations=False):
+		activations = {}
+		
+		def get_activation(name):
+			def hook(model, input, output):
+				activations[name] = output.detach()
+			return hook
+		
+		# Register hooks for each layer
+		handles = []
+		for name, layer in self.encoder.named_children():
+			handles.append(layer.register_forward_hook(get_activation(f'encoder_{name}')))
+		for name, layer in self.decoder.named_children():
+			handles.append(layer.register_forward_hook(get_activation(f'decoder_{name}')))
+		
+		# Forward pass
 		encoded = self.encoder(x)
 		decoded = self.decoder(encoded)
+		
+		# Remove hooks
+		for handle in handles:
+			handle.remove()
+		
+		if return_activations:
+			return encoded, decoded, activations
 		return encoded, decoded
 	
 	def encode(self,x):
