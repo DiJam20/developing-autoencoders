@@ -19,7 +19,7 @@ def load_model(model_path, model_type, epoch):
     
     dae_n_hidden_ls = [512, 128, size_ls[epoch]]
     
-    if model_type == 'sae':
+    if model_type == 'sae' or model_type == 'SAE':
         model = NonLinearAutoencoder(n_input, sae_n_hidden_ls, n_layers)
     else:
         model = NonLinearAutoencoder(n_input, dae_n_hidden_ls, n_layers)
