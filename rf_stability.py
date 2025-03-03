@@ -1,123 +1,46 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 from matplotlib.colors import ListedColormap
 import seaborn as sns
-
-import torch
-from torchvision import datasets, transforms
-from torch.utils.data import DataLoader
-from torch.autograd import Variable
-from tqdm import tqdm
-
-import act_max_util as amu
 
 from autoencoder import *
 from solver import *
 from model_utils import *
 
 
-
 IMG_WIDTH, IMG_HEIGHT = 28, 28
 MAX_NEURONS = 32
 
-steps = 100               # perform 100 iterations
-alpha = torch.tensor(100) # learning rate (step size)
-verbose = False           # print activation every step
-L2_Decay = True           # enable L2 decay regularizer
-Gaussian_Blur = False     # enable Gaussian regularizer
-Norm_Crop = False         # enable norm regularizer
-Contrib_Crop = False      # enable contribution regularizer
 
+def display_ready_rf(rf: np.ndarray) -> np.ndarray:
+    """
+    Reshape the RF to be displayed as an image.
 
-def compute_rf_for_single_model(model_idx, model_type, size_ls=None, num_epochs=60):
-    rf_matrix = []
+    Args:
+        rf (np.ndarray): Receptive field to reshape.
     
-    for epoch in range(num_epochs):
-        data = torch.randn(IMG_WIDTH, IMG_HEIGHT)
-        data = data.unsqueeze(0)
-        input = data.view(data.size(0), -1)
-        input.requires_grad_(True)
-
-        ae = load_model(f'/home/david/mnist_model/{model_type}/{model_idx}', model_type, epoch)
-        
-        layer_name = 'bottle_neck'
-        activation_dictionary = {}
-
-        ae.encoder.encoder_3.register_forward_hook(amu.layer_hook(activation_dictionary, layer_name))
-
-        loop_size = size_ls[epoch] if model_type == "dae" else MAX_NEURONS
-
-        rf_ls = []
-        for i in range(loop_size):
-            output = amu.act_max(network=ae,
-                            input=input,
-                            layer_activation=activation_dictionary,
-                            layer_name=layer_name,
-                            unit=i,
-                            steps=steps,
-                            alpha=alpha,
-                            verbose=verbose,
-                            L2_Decay=L2_Decay,
-                            Gaussian_Blur=Gaussian_Blur,
-                            Norm_Crop=Norm_Crop,
-                            Contrib_Crop=Contrib_Crop,
-                            )
-            rf_ls.append(output.detach().numpy())
-        
-        max_size = MAX_NEURONS
-
-        # Pad the rf_ls list to max_size before converting to numpy array
-        if loop_size < max_size:
-            # Create a zero RF with the same shape as the first RF
-            zero_rf = np.zeros_like(rf_ls[0])
-            
-            # Add zero RFs until we reach max_size
-            for _ in range(loop_size, max_size):
-                rf_ls.append(zero_rf.copy())
-        
-        # Convert to numpy array and apply squeeze as in the original function
-        rf_ls = np.array(rf_ls).squeeze()
-        rf_matrix.append(rf_ls)
-
-    return rf_matrix
-
-
-def compute_rfs(model_type, size_ls=None, num_models=10, num_epochs=60):
-
-    result_file = f"Results/{model_type}_rfs.npy"
-
-    # Check if results already exist to avoid recomputation
-    if os.path.exists(result_file):
-        print(f"Loading existing results from {result_file}")
-        return np.load(result_file)
-
-    # For all different models
-    rf_matrices = []
-
-    for model_idx in tqdm(range(num_models), desc=f"Model {model_type}"):
-        rf_matrix = compute_rf_for_single_model(
-            model_idx, 
-            model_type, 
-            size_ls=size_ls,
-            num_epochs=num_epochs
-        )
-
-        rf_matrices.append(rf_matrix)
-
-    np.save(result_file, rf_matrices)
-
-    return rf_matrices
-
-
-def display_ready_rf(rf):
+    Returns:
+        np.ndarray: Reshaped receptive field.
+    """
     if len(rf.shape) == 1:
         return rf.reshape(IMG_WIDTH, IMG_HEIGHT)
     return rf
 
 
-def plot_rfs_for_single_model(model_type, model_idx=0, epoch_idx=-1):
-    rf_matrices = np.load(f"Results/{model_type}_rf_stability_all_rfs.npy", allow_pickle=True)
+def plot_rfs_for_single_model(model_type: str, model_idx: int = 0, epoch_idx: int = -1) -> None:
+    """
+    Plot receptive fields for all neurons in a model at a specific epoch.
+    
+    Args:
+        model_type (str): Type of model ('sae' or 'dae')
+        model_idx (int): Index of the model to visualize
+        epoch_idx (int): Index of epoch to visualize (-1 for last epoch)
+
+    Returns:
+        None: Plots the receptive fields and saves the figure.
+    """
+    rf_matrices = np.load(f"Results/{model_type}_rfs.npy", allow_pickle=True)
     rf_matrix = rf_matrices[model_idx]
     rf_ls = rf_matrix[epoch_idx]
     
@@ -125,6 +48,7 @@ def plot_rfs_for_single_model(model_type, model_idx=0, epoch_idx=-1):
     fig.suptitle(f"Receptive Fields ({model_type})", fontsize=24)
     
     for i in range(MAX_NEURONS):
+        # MATCH SUBPLOT VALUES TO NUMBER OF NEURONS
         plt.subplot(4,8,i+1)
         plt.title(str(i+1))
         plt.axis('off')
@@ -133,30 +57,62 @@ def plot_rfs_for_single_model(model_type, model_idx=0, epoch_idx=-1):
         if i < len(rf_ls):
             plt.imshow(display_ready_rf(rf_ls[i]), cmap='gray')
         else:
-            plt.imshow(np.zeros((28,28)), cmap='gray')
+            plt.imshow(np.zeros((IMG_WIDTH, IMG_HEIGHT)), cmap='gray')
             
     plt.tight_layout(rect=[0, 0, 1, 0.95])
-    plt.savefig(f"Results/{model_type}_rf_stability_model_{model_idx}_epoch_{epoch_idx}.png", dpi=300)
-    plt.savefig(f"Results/{model_type}_rf_stability_model_{model_idx}_epoch_{epoch_idx}.svg")
+
+    epoch_label = epoch_idx if epoch_idx >= 0 else f"final"
+    plt.savefig(f"Results/{model_type}_rfs_model_{model_idx}_epoch_{epoch_label}.png", dpi=300)
+    plt.savefig(f"Results/{model_type}_rfs_model_{model_idx}_epoch_{epoch_label}.svg")
+    plt.close(fig)
 
 
-def plot_rf_over_time(model_type, model_idx, neuron_idx, num_epochs=60):
-    rf_matrices = np.load(f"Results/{model_type}_rf_stability_all_angles.npy", allow_pickle=True)
+def plot_rf_over_time(model_type: str, model_idx: int, neuron_idx: int) -> None:
+    """
+    Plot the receptive field development of a single neuron over all epochs for a single model.
+
+    Args:
+        model_type (str): Type of model to plot RF development for.
+        model_idx (int): Index of the model to plot RF development for.
+        neuron_idx (int): Index of the neuron to plot RF development for.
+
+    Returns:
+        None: Plots the receptive field development and saves the figure.
+    """
+    rf_matrices = np.load(f"Results/{model_type}_rfs.npy", allow_pickle=True)
     rf_matrix = rf_matrices[model_idx]
+        
+    # Calculate grid dimensions
+    cols = 5
+    rows = (len(rf_matrix) + cols - 1) // cols
     
-    fig, axes = plt.subplots(10, 5, figsize=(10, 20))
+    fig, axes = plt.subplots(rows, cols, figsize=(10, rows * 2))
     axes = axes.ravel()
-
-    for i in range(num_epochs):
+    
+    for i in range(len(rf_matrix)):
         axes[i].imshow(display_ready_rf(rf_matrix[i][neuron_idx]), cmap='gray')
         axes[i].axis('off')
 
     fig.suptitle(f"Receptive Field Development of Neuron 0 ({model_type})", fontsize=24)
     plt.tight_layout(rect=[0, 0, 1, 0.99])
-    plt.show()
+    plt.savefig(f"Results/{model_type}_rf_development_model_{model_idx}_neuron_{neuron_idx}.png", dpi=300)
+    plt.savefig(f"Results/{model_type}_rf_development_model_{model_idx}_neuron_{neuron_idx}.svg")
+    plt.close(fig)
 
 
-def compute_angles_between_rfs(model_type, num_models, num_epochs, num_neurons):
+def compute_angles_between_rfs(model_type: str, num_models: int, num_epochs: int, num_neurons: int) -> None:
+    """
+    Compute the angles between the receptive fields of all neurons over all epochs for all models.
+
+    Args:
+        model_type (str): Type of model to compute angles for.
+        num_models (int): Number of models to compute angles for.
+        num_epochs (int): Number of epochs to compute angles for.
+        num_neurons (int): Number of neurons in the bottleneck layer.
+
+    Returns:
+        None: Saves the angles between RFs to a file.
+    """
     angles_file = f"Results/{model_type}_rf_stability_angles.npy"
 
     if os.path.exists(angles_file):
@@ -178,7 +134,17 @@ def compute_angles_between_rfs(model_type, num_models, num_epochs, num_neurons):
     np.save(angles_file, angles_matrix)
 
 
-def compute_average_angles_matrix(model_type):
+def compute_average_angles_matrix(model_type: str) -> tuple:
+    """
+    Compute the average angles between RFs over all models and epochs.
+
+    Args:
+        model_type (str): Type of model to compute angles for.
+    
+    Returns:
+        average_angles_matrix (np.ndarray): Matrix of average angles between RFs over all models and epochs.
+        non_computable_cells (np.ndarray): Matrix of non-computable cells in the average angles matrix.
+    """
     angles_matrix = np.load(f"Results/{model_type}_rf_stability_angles.npy")
     average_angles_matrix = np.mean(angles_matrix, axis=0)
 
@@ -198,7 +164,16 @@ def compute_average_angles_matrix(model_type):
     return average_angles_matrix, non_computable_cells
 
 
-def create_heatmap(model_type):
+def create_heatmap(model_type: str) -> None:
+    """
+    Create a heatmap of the average angles between RFs over all models and epochs.
+    
+    Args:
+        model_type (str): Type of model to create heatmap for.
+        
+    Returns:
+        None: Saves the heatmap to a file.
+    """
     angle_matrix, non_computable_cells = compute_average_angles_matrix(model_type)
     
     fig, ax = plt.subplots(figsize=(12, 7), dpi=300)
@@ -253,9 +228,20 @@ def create_heatmap(model_type):
     plt.close(fig)
 
 
-def analyze_rf_stability(model_type, size_ls=None, num_models=10, num_epochs=60):
-    compute_rfs(model_type, size_ls=size_ls, num_models=num_models, num_epochs=num_epochs)
+def analyze_rf_stability(model_type: str, size_ls: list = None, num_models: int = 10, num_epochs: int = 60) -> None:
+    """
+    Analyze the stability of receptive fields over all models and epochs for a specific model type.
+    
+    Args:
+        model_type (str): Type of model to analyze RF stability for.
+        size_ls (list): List of sizes for each epoch for DAE models.
+        num_models (int): Number of models to analyze RF stability for.
+        num_epochs (int): Number of epochs to analyze RF stability for.
+    
+    Returns:
+        None: Computes and saves RF stability results.
+    """
     compute_angles_between_rfs(model_type, num_models, num_epochs, MAX_NEURONS)
     create_heatmap(model_type)
     plot_rfs_for_single_model(model_type, model_idx=0, epoch_idx=-1)
-    plot_rf_over_time(model_type, model_idx=0, neuron_idx=0, num_epochs=num_epochs)
+    plot_rf_over_time(model_type, model_idx=0, neuron_idx=0)
