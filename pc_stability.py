@@ -10,8 +10,9 @@ from sklearn.decomposition import PCA
 import concurrent.futures
 import multiprocessing
 from tqdm import tqdm
-from autoencoder import NonLinearAutoencoder
+
 from model_utils import cosine_angle_between_pcs, load_model
+
 
 def initialize_mnist_dataset():
     """
@@ -42,6 +43,7 @@ def initialize_mnist_dataset():
 
     return test_images, test_labels
 
+
 def calculate_angles_for_single_model(model_idx, model_type, size_ls=None, num_epochs=60):
     """
     Calculate PCA angles for a single model across all epochs.
@@ -61,7 +63,7 @@ def calculate_angles_for_single_model(model_idx, model_type, size_ls=None, num_e
     latent_matrices = []
     
     # Calculate latent matrices for each epoch
-    for epoch in range(num_epochs):
+    for epoch in tqdm(range(num_epochs), desc=f"Model {model_idx} epochs", leave=False):
         latent_matrix = []
         model_path = f"/home/david/mnist_model/{model_type}/{model_idx}"
         ae = load_model(model_path, model_type=model_type, epoch=epoch, size_ls=size_ls)
@@ -98,7 +100,8 @@ def calculate_angles_for_single_model(model_idx, model_type, size_ls=None, num_e
     
     return angles_per_model
 
-def angle_matrix(model_type, size_ls=None, num_models=10, num_epochs=60):
+
+def compute_angle_matrix(model_type, size_ls=None, num_models=10, num_epochs=60):
     """
     Calculate principal component angles across epochs for multiple models using parallel processing.
     
@@ -115,6 +118,13 @@ def angle_matrix(model_type, size_ls=None, num_models=10, num_epochs=60):
     max_workers = max(1, multiprocessing.cpu_count() - 1)
     
     print(f"Starting processing of {num_models} {model_type} models using {max_workers} workers")
+
+    result_file = f"Results/{model_type}_pc_stability_all_angles.npy"
+
+    # Check if results already exist to avoid recomputation
+    if os.path.exists(result_file):
+        print(f"Loading existing results from {result_file}")
+        return np.load(result_file)
     
     # Create process pool and map the function across all models
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -131,12 +141,11 @@ def angle_matrix(model_type, size_ls=None, num_models=10, num_epochs=60):
             all_angles.append(result)
     
     # Save results
-    output_path = f"Results/{model_type}_pc_stability_all_angles.npy"
-    np.save(output_path, all_angles)
-    print(f"Results saved to {output_path}")
+    np.save(result_file, all_angles)
+    print(f"Results saved to {result_file}")
 
 
-def average_angle_matrix(model_type):
+def compute_average_angle_matrix(model_type):
     all_angles = np.load(f"Results/{model_type}_pc_stability_all_angles.npy")
     
     if model_type == "sae":
@@ -158,11 +167,12 @@ def average_angle_matrix(model_type):
 
     return angle_matrix, non_computable_cells
 
-def heatmap_pc_stability(angle_matrix, non_computable_cells, model_type):
+
+def create_heatmap(angle_matrix, non_computable_cells, model_type):
     fig, ax = plt.subplots(figsize=(12, 7), dpi=300)
 
     heatmap = sns.heatmap(
-        angle_matrix[:, :50],
+        angle_matrix[:, :],
         cmap="plasma",
         vmin=0,
         vmax=90,
@@ -171,10 +181,11 @@ def heatmap_pc_stability(angle_matrix, non_computable_cells, model_type):
         square=True,
     )
 
+    # Grey out non-computable cells
     if model_type == "dae":
         cmap_grey = ListedColormap(['grey'])
         sns.heatmap(
-            non_computable_cells[:, :50],
+            non_computable_cells[:, :],
             cmap=cmap_grey,
             cbar=False,
             alpha=1,
@@ -182,21 +193,56 @@ def heatmap_pc_stability(angle_matrix, non_computable_cells, model_type):
             square=True,
         )
 
+    # Customize colorbar
     cbar = heatmap.collections[0].colorbar
     cbar.set_ticks([0, 45, 90])
     cbar.set_ticklabels(["0°", "45°", "90°"], fontsize=24)
     cbar.set_label("PC Angle Difference", fontsize=24)
     cbar.minorticks_off()
 
-    ax.set_xticks([0.5, 24.5, 49.5])
-    ax.set_xticklabels(["1-2", "25-26", "49-50"], fontsize=24, rotation=0)
+    # Customize axes
+    max_epochs = angle_matrix.shape[1]
+    mid_epoch = max_epochs // 2
+    ax.set_xticks([0.5, mid_epoch - 0.5, max_epochs - 0.5])
+    ax.set_xticklabels(["1-2", f"{mid_epoch}-{mid_epoch+1}", f"{max_epochs}-{max_epochs+1}"], 
+                        fontsize=24, rotation=0)
 
-    ax.set_yticks([0.5, 15.5, 31.5])
-    ax.set_yticklabels(["1", "16", "32"], fontsize=24, rotation=90)
+    num_pcs = angle_matrix.shape[0]
+    mid_pc = num_pcs // 2
+    ax.set_yticks([0.5, mid_pc - 0.5, num_pcs - 0.5])
+    ax.set_yticklabels(["1", f"{mid_pc}", f"{num_pcs}"], fontsize=24, rotation=90)
 
-    ax.set_title("Stability of Principal Components (AE)", fontsize=28, pad=25)
+    if model_type == "sae":
+        ax.set_title("Stability of Principal Components (AE)", fontsize=28, pad=25)
+    elif model_type == "dae":
+        ax.set_title("Stability of Principal Components (Dev-AE)", fontsize=28, pad=25)
     ax.set_xlabel("Epochs", fontsize=24)
     ax.set_ylabel("Principal Component Index", fontsize=24)
 
     plt.savefig(f"Results/{model_type}_stability_of_pcs.png", bbox_inches="tight", dpi=300)
     plt.savefig(f"Results/{model_type}_stability_of_pcs.svg", bbox_inches="tight")
+    plt.close(fig)
+
+
+def analyze_pc_stability(model_type, size_ls=None, num_models=10, num_epochs=60):
+    """
+    Main function to perform complete PC stability analysis.
+    
+    Args:
+        model_type: Type of model ('sae' or 'dae')
+        size_ls: List of component sizes for DAE models
+        num_models: Number of models to process
+        num_epochs: Number of epochs per model
+    """
+    print(f"Starting PC stability analysis for {model_type} model type")
+    
+    # Step 1: Compute angle matrix
+    compute_angle_matrix(model_type, size_ls, num_models, num_epochs)
+    
+    # Step 2: Compute average angle matrix
+    angle_matrix, non_computable_cells = compute_average_angle_matrix(model_type)
+    
+    # Step 3: Create heatmap visualization
+    create_heatmap(angle_matrix, non_computable_cells, model_type)
+    
+    print(f"PC stability analysis for {model_type} complete.")
