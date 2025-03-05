@@ -1,10 +1,9 @@
 import os
-
-
-from autoencoder import NonLinearAutoencoder
-from solver import *
-from model_utils import *
-from pc_stability import *
+from pc_stability import analyze_pc_stability
+from rf_computation import compute_rfs
+from rf_stability import analyze_rf_stability
+from rf_specificity import compute_rf_specificity
+from neuron_activation import compute_hidden_layer_activation
 
 def main():
     size_ls = [4, 4, 4, 4, 4, 10,
@@ -18,13 +17,20 @@ def main():
             32, 32, 32, 32, 32, 32,
             32, 32, 32, 32, 32, 32,]
     
-    angle_matrix("sae", num_models=3)
-    angle_matrix("dae", size_ls=size_ls, num_models=3)
-    average_angle_matrix_sae, non_computable_cells_sae = average_angle_matrix("sae")
-    average_angle_matrix_dae, non_computable_cells_dae = average_angle_matrix("dae")
+    # analyze_pc_stability("sae", size_ls=None, num_models=10, num_epochs=60)
+    # analyze_pc_stability("dae", size_ls=size_ls, num_models=10, num_epochs=60)
 
-    heatmap_pc_stability(average_angle_matrix_sae, non_computable_cells_sae, "sae")
-    heatmap_pc_stability(average_angle_matrix_dae, non_computable_cells_dae, "dae")
+    # compute_rfs("sae", size_ls=None, num_models=1, num_epochs=60)
+    # compute_rfs("dae", size_ls=size_ls, num_models=1, num_epochs=60)
+
+    # analyze_rf_stability("sae", size_ls=None, num_models=1, num_epochs=60)
+    # analyze_rf_stability("dae", size_ls=size_ls, num_models=1, num_epochs=60)
+
+    # compute_rf_specificity("sae", num_models=1, size_ls=None, num_epochs=60)
+    # compute_rf_specificity("dae", num_models=1, size_ls=size_ls, num_epochs=60)
+
+    compute_hidden_layer_activation("sae", num_models=1, num_epochs=10, epoch=9)
+    compute_hidden_layer_activation("dae", num_models=1, num_epochs=60, epoch=9, size_ls=size_ls)
 
 if __name__ == "__main__":
     main()
