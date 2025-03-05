@@ -51,7 +51,7 @@ def compute_activation_for_single_model(model_idx: int, model_type: str, rf_matr
             if i < max_size:
                 # Ensure each activation is padded to max_size length
                 act_padded = np.zeros(max_size)
-                act_padded[:len(act)] = act[:max_size]  # Truncate or pad as needed
+                act_padded[:len(act)] = act[:max_size]
                 padded_activations[i] = act_padded
         
         activation_matrix.append(padded_activations)
