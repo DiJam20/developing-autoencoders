@@ -23,6 +23,29 @@ def load_mnist():
     test_loader = DataLoader(mnist_test, batch_size=batch_size, shuffle=False, num_workers=6)
     return train_loader, validation_loader, test_loader
 
+
+def load_mnist_tensor():
+    _, _, test_loader = load_mnist()
+
+    tensor_test_images = []
+    test_labels = torch.zeros(10000, dtype=torch.long)
+
+    current_idx = 0
+    for images, labels in test_loader:
+        batch_size = images.size(0)
+        
+        test_labels[current_idx:current_idx + batch_size] = labels
+        
+        for i in range(batch_size):
+            tensor_test_images.append(images[i].flatten())
+        
+        current_idx += batch_size
+
+    tensor_test_images = torch.stack(tensor_test_images)
+
+    return tensor_test_images, test_labels
+
+
 def load_model(model_path, model_type, epoch, size_ls=None):
     n_input = 28*28
     n_layers = 3
@@ -55,15 +78,23 @@ def load_model(model_path, model_type, epoch, size_ls=None):
     model.load_state_dict(weights)
     return model
 
-# cos(theta) = (pc1_epoch1 · pc1_epoch2) / (||pc1_epoch1|| * ||pc1_epoch2||)
-def cosine_angle_between_pcs(pc_a, pc_b):
-    numerator = np.dot(pc_a, pc_b)
-    denominator = np.linalg.norm(pc_a) * np.linalg.norm(pc_b)
 
+def cosine_angle_between_vectors(vec_a, vec_b):
+    """
+    Compute the cosine angle between two vectors.
+    cos(theta) = (vec_a · vec_b) / (||vec_a|| * ||vec_b||)
+    
+    Args:
+        vec_a: First vector
+        vec_b: Second vector
+    
+    Returns:
+        angle: Angle between the two vectors in degrees, normalized to be between 0 and 90 degrees
+    """
+    numerator = np.dot(vec_a, vec_b)
+    denominator = np.linalg.norm(vec_a) * np.linalg.norm(vec_b)
     if denominator == 0:
         return np.nan
-
     cos_value = np.clip(numerator / denominator, -1.0, 1.0)
     angle = np.arccos(cos_value) * 180 / np.pi
-    
     return min(angle, 180 - angle)
