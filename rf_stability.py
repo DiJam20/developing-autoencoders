@@ -117,7 +117,7 @@ def compute_angles_between_rfs(model_type: str, num_models: int, num_epochs: int
 
     if os.path.exists(angles_file):
         print(f"Loading existing angle calculations from {angles_file}")
-        return np.load(angles_file)
+        return None
 
     rf_matrices = np.load(f"Results/{model_type}_rfs.npy", allow_pickle=True)
     
@@ -126,7 +126,7 @@ def compute_angles_between_rfs(model_type: str, num_models: int, num_epochs: int
     for model in range(num_models):
         for epoch in range(num_epochs-1):
             for neuron in range(num_neurons):
-                angle = cosine_angle_between_pcs(rf_matrices[model][epoch][neuron], rf_matrices[model][epoch + 1][neuron])
+                angle = cosine_angle_between_vectors(rf_matrices[model][epoch][neuron], rf_matrices[model][epoch + 1][neuron])
                 angles_matrix[model, neuron, epoch] = angle
 
     angles_matrix = np.array(angles_matrix)
