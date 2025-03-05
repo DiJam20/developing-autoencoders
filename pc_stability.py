@@ -11,7 +11,7 @@ import concurrent.futures
 import multiprocessing
 from tqdm import tqdm
 
-from model_utils import cosine_angle_between_pcs, load_model
+from model_utils import *
 
 
 def initialize_mnist_dataset():
@@ -94,7 +94,7 @@ def calculate_angles_for_single_model(model_idx, model_type, size_ls=None, num_e
     for i in range(32):
         angles_per_pc = []
         for j in range(num_epochs-1):
-            cosine_angle = cosine_angle_between_pcs(latent_matrices[j][i], latent_matrices[j+1][i])
+            cosine_angle = cosine_angle_between_vectors(latent_matrices[j][i], latent_matrices[j+1][i])
             angles_per_pc.append(cosine_angle)
         angles_per_model.append(angles_per_pc)
     
@@ -124,7 +124,7 @@ def compute_angle_matrix(model_type, size_ls=None, num_models=10, num_epochs=60)
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
         print(f"Loading existing results from {result_file}")
-        return np.load(result_file)
+        return None
     
     # Create process pool and map the function across all models
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
