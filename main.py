@@ -4,6 +4,8 @@ from rf_computation import compute_rfs
 from rf_stability import analyze_rf_stability
 from rf_specificity import compute_rf_specificity
 from neuron_activation import compute_hidden_layer_activation
+from power_spectra import plot_power_spectra
+from pc_noise import run_pc_noise_analysis
 
 def main():
     size_ls = [4, 4, 4, 4, 4, 10,
@@ -29,8 +31,12 @@ def main():
     # compute_rf_specificity("sae", num_models=1, size_ls=None, num_epochs=60)
     # compute_rf_specificity("dae", num_models=1, size_ls=size_ls, num_epochs=60)
 
-    compute_hidden_layer_activation("sae", num_models=1, num_epochs=10, epoch=9)
-    compute_hidden_layer_activation("dae", num_models=1, num_epochs=60, epoch=9, size_ls=size_ls)
+    # compute_hidden_layer_activation("sae", num_models=1, num_epochs=10, epoch=9)
+    # compute_hidden_layer_activation("dae", num_models=1, num_epochs=60, epoch=9, size_ls=size_ls)
+
+    # plot_power_spectra(1, 59)
+
+    run_pc_noise_analysis(2)
 
 if __name__ == "__main__":
     main()
