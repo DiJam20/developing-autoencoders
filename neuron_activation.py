@@ -11,7 +11,9 @@ from model_utils import *
 from solver import *
 
 
-# TODO violin plot?
+# TODO violin plot? (18)
+# TODO plot zero activation in bottleneck barchart (18)
+# TODO plot mean activation for bottleneck (18)
 
 layers_to_measure = [
     'encoder_activation_1',
