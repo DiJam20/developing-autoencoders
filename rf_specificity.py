@@ -39,12 +39,10 @@ def compute_activation_for_single_model(model_idx: int, model_type: str, rf_matr
         # Process each RF
         epoch_activations = []
         with torch.no_grad():
-            for rf in rf_ls:
-                input = torch.tensor(rf, dtype=torch.float32).reshape(1, -1)
-                encoded, decoded = ae(input)
-                absolute_encoded = torch.abs(encoded)
-                # Store as a flat array - critical for consistent shapes
-                epoch_activations.append(absolute_encoded.cpu().numpy().flatten())
+            inputs = torch.tensor(np.stack(rf_ls), dtype=torch.float32).reshape(len(rf_ls), -1)
+            encoded, _ = ae(inputs)
+            absolute_encoded = torch.abs(encoded)
+            epoch_activations = absolute_encoded.cpu().numpy()
         
         # Pad to maximum 32 RFs which give maximum 32 activations
         padded_activations = np.zeros((max_size, max_size))
@@ -81,7 +79,7 @@ def compute_neuron_activations(model_type: str, num_models: int = 40,
     # Check if results already exist
     if os.path.exists(result_file):
         print(f"Loading existing results from {result_file}")
-        return np.load(result_file)
+        return None
     
     # Load all RFs at once
     print(f"Loading all receptive fields...")
