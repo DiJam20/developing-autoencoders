@@ -131,6 +131,95 @@ def divide_latent_tensor(tensor, new_dim):
 		new_tensor.to('gpu')
 	return new_tensor
 
+
+def extend_tensor_with_noise(tensor, new_dim, dim=0):
+    """
+	Fills tensor with noise to match new_dim along the specified dimension.
+	Noise is drawn from a normal distribution with mean and standard deviation
+	based on the original tensor values.
+	1D tensors (biases) are extended along dimension 0.
+	2D tensors (weights) are extended along dimension 0 for encoder weights
+	and along dimension 1 for decoder weights.
+	Encoder (dim 0)
+		w1,1 w1,2 ... w1,128	-->		w1,1 w1,2 ... w1,128
+		...						-->		...
+		w4,1 w4,2 ... w4,128 	-->		...
+										w4,1 w4,2 ... w4,128
+	Decoder (dim 1)
+		w1,1 w1,2 ... w1,4		-->		w1,1 w1,2 ... w1,4 ... w1,8
+		...						-->		...
+		w128,1 w128,2 ... w128,4-->		w128,1 w128,2 ... w128,4 ... w128,8
+    """
+    # Get tensor shape
+    tensor_shape = tensor.shape
+    tensor_dims = len(tensor_shape)
+    
+    # If tensor is 1D and we're trying to extend along second dimension, that's an error
+    if tensor_dims == 1 and dim == 1:
+        raise ValueError("Cannot extend a 1D tensor along dimension 1")
+    
+    # If new dimension is not larger, return the original tensor (not a slice)
+    if new_dim <= tensor_shape[dim]:
+        return tensor
+    
+    if tensor_dims == 1:  # 1D tensor (bias)
+        old_dim = tensor_shape[0]
+        
+        # Create a new tensor with the desired size
+        new_tensor = torch.zeros(new_dim, device=tensor.device)
+        
+        # Copy the original values
+        new_tensor[:old_dim] = tensor
+        
+        # Calculate mean and standard deviation
+        mean = tensor.mean()
+        std = tensor.std()
+        
+        # Fill the rest with noise
+        new_tensor[old_dim:] = torch.normal(mean=mean, std=std, size=(new_dim - old_dim,))
+        
+    elif tensor_dims == 2:  # 2D tensor (weight matrix)
+        # Handle extension along different dimensions
+        if dim == 0:  # Extend along first dimension (for encoder weights)
+            old_dim = tensor_shape[0]
+            weight_size = tensor_shape[1]
+            
+            # Create new tensor
+            new_tensor = torch.zeros(new_dim, weight_size, device=tensor.device)
+            
+            # Copy original values
+            new_tensor[:old_dim] = tensor
+            
+            # Calculate stats
+            mean = tensor.mean()
+            std = tensor.std()
+            
+            # Fill rest with noise
+            new_tensor[old_dim:] = torch.normal(mean=mean, std=std, size=(new_dim - old_dim, weight_size))
+            
+        elif dim == 1:  # Extend along second dimension (for decoder weights)
+            old_dim = tensor_shape[1]
+            weight_size = tensor_shape[0]
+            
+            # Create new tensor
+            new_tensor = torch.zeros(weight_size, new_dim, device=tensor.device)
+            
+            # Copy original values
+            new_tensor[:, :old_dim] = tensor
+            
+            # Calculate stats
+            mean = tensor.mean()
+            std = tensor.std()
+            
+            # Fill rest with noise
+            new_tensor[:, old_dim:] = torch.normal(mean=mean, std=std, size=(weight_size, new_dim - old_dim))
+    
+    # Handle GPU device if needed
+    if tensor.device.type == 'gpu':
+        new_tensor = new_tensor.to('gpu')
+        
+    return new_tensor
+
 def divide_enc_tensor(tensor, new_dim):
 	"""
 	Multiplies the given tensor in a way that it matches the new_dim parameter.
@@ -210,42 +299,49 @@ def l_develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
 
 	return autoencoder
 
-def nl_develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
-	new_size = new_n_hidden_ls[-1]
-	# Create new autoencoder with corresponding bottleneck size.
-	n_layers = hyperparam['n_layers']
-	autoencoder = NonLinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,n_layers)
 
-	# Load the weights learned in the last epoch.
-	state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
-	num_weights = state_dict["encoder.encoder_{}.weight".format(n_layers)].size(1)  
-	# Use different manners to determine the new weights.
-	if manner == 'naiv':
-		new_weights_encoder = torch.randn(new_size, num_weights)
-		new_bias_encoder = torch.randn(new_size)
-		new_weights_decoder = torch.randn(num_weights, new_size)
-	elif manner == 'cell_division':
-		# In the following three lines, a part of the new, randomly initialized, weights get assigned
-		# to the weights that were learned in the last epoch.
-		new_weights_encoder = divide_enc_tensor(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size)
-		new_bias_encoder = divide_latent_tensor(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size)
-		new_weights_decoder = divide_latent_tensor(state_dict["decoder.decoder_1.weight"], new_size)
-		
-	# Use the new weights to update the state_dict.
-	state_dict["encoder.encoder_{}.weight".format(n_layers)] = \
-		set_old_weights(new_weights_encoder, state_dict["encoder.encoder_{}.weight".format(n_layers)])
-	state_dict["encoder.encoder_{}.bias".format(n_layers)] = \
-		set_old_weights(new_bias_encoder, state_dict["encoder.encoder_{}.bias".format(n_layers)])
-	state_dict["decoder.decoder_1.weight"] = \
-		set_old_weights(new_weights_decoder, state_dict["decoder.decoder_1.weight"])
-	# use new state_dict to update model weights
-	print('debug nan in encoder weights',torch.isnan(state_dict["encoder.encoder_{}.weight".format(n_layers)]).sum())
-	print('debug nan in encoder bias',torch.isnan(state_dict["encoder.encoder_{}.bias".format(n_layers)]).sum())
-	print('debug nan in decoder weights',torch.isnan(state_dict["decoder.decoder_1.weight"]).sum())
-	autoencoder.load_state_dict(state_dict)
+def nl_develope_AE(new_n_hidden_ls, hyperparam, save_path, epoch, manner='naiv'):
+    new_size = new_n_hidden_ls[-1]
+    # Create new autoencoder with corresponding bottleneck size.
+    n_layers = hyperparam['n_layers']
+    autoencoder = NonLinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, n_layers)
 
-	return autoencoder
-		
+    # Load the weights learned in the last epoch.
+    state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
+    num_weights = state_dict["encoder.encoder_{}.weight".format(n_layers)].size(1)  
+    # Use different manners to determine the new weights.
+    if manner == 'naiv':
+        new_weights_encoder = torch.randn(new_size, num_weights)
+        new_bias_encoder = torch.randn(new_size)
+        new_weights_decoder = torch.randn(num_weights, new_size)
+    elif manner == 'cell_division':
+        # In the following three lines, a part of the new, randomly initialized, weights get assigned
+        # to the weights that were learned in the last epoch.
+        new_weights_encoder = divide_enc_tensor(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size)
+        new_bias_encoder = divide_latent_tensor(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size)
+        new_weights_decoder = divide_latent_tensor(state_dict["decoder.decoder_1.weight"], new_size)
+    elif manner == 'gaussian':
+        # Important: For encoder weights and bias, extend along dimension 0
+        # For decoder weights, extend along dimension 1
+        new_weights_encoder = extend_tensor_with_noise(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size, dim=0)
+        new_bias_encoder = extend_tensor_with_noise(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size, dim=0)
+        new_weights_decoder = extend_tensor_with_noise(state_dict["decoder.decoder_1.weight"], new_size, dim=1)
+        
+    # Use the new weights to update the state_dict.
+    state_dict["encoder.encoder_{}.weight".format(n_layers)] = new_weights_encoder
+    state_dict["encoder.encoder_{}.bias".format(n_layers)] = new_bias_encoder
+    state_dict["decoder.decoder_1.weight"] = new_weights_decoder
+    
+    # Debug checks for NaN values
+    print('debug nan in encoder weights', torch.isnan(state_dict["encoder.encoder_{}.weight".format(n_layers)]).sum())
+    print('debug nan in encoder bias', torch.isnan(state_dict["encoder.encoder_{}.bias".format(n_layers)]).sum())
+    print('debug nan in decoder weights', torch.isnan(state_dict["decoder.decoder_1.weight"]).sum())
+    
+    # Load the state dict into the model
+    autoencoder.load_state_dict(state_dict)
+
+    return autoencoder
+	
 
 def l_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
 	if save_path is None:
@@ -301,17 +397,24 @@ def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,o
 	hyperparam = model.get_hyperparams()
 	print(size_each_epoch)
 
+	current_bottleneck_size = None
+	ae = None
+
 	for epoch in range(n_epochs):
 		print(size_each_epoch[epoch])
-		# Create new autoencoder with corresponding bottleneck size.
 		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
-		if epoch == 0:
-			ae =NonLinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
+		
+		# Only reinitialise autoencoder and optimiser when the bottleneck size increases
+		if size_each_epoch[epoch] != current_bottleneck_size or ae is None:
+			current_bottleneck_size = size_each_epoch[epoch]
 
-		else:
-			ae = nl_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
-			optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
-			
+			if epoch == 0:
+				ae = NonLinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
+			else:
+				ae = nl_develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
+
+			optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+		
 		train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
 		vali_loss,_,_ = test(ae,vali_loader,device)
 		train_losses.append(train_loss)
