@@ -128,13 +128,11 @@ def compute_angle_matrix(model_type, size_ls=None, num_models=10, num_epochs=60)
     
     # Create process pool and map the function across all models
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        # Map the function across all model indices with a progress bar
         futures = []
         for idx in range(num_models):
             future = executor.submit(calculate_angles_for_single_model, idx, model_type, size_ls, num_epochs)
             futures.append(future)
             
-        # Process results with progress bar
         all_angles = []
         for future in tqdm(concurrent.futures.as_completed(futures), total=num_models, desc=f"Processing {model_type} models"):
             result = future.result()
@@ -236,13 +234,8 @@ def analyze_pc_stability(model_type, size_ls=None, num_models=10, num_epochs=60)
     """
     print(f"Starting PC stability analysis for {model_type} model type")
     
-    # Step 1: Compute angle matrix
     compute_angle_matrix(model_type, size_ls, num_models, num_epochs)
-    
-    # Step 2: Compute average angle matrix
     angle_matrix, non_computable_cells = compute_average_angle_matrix(model_type)
-    
-    # Step 3: Create heatmap visualization
     create_heatmap(angle_matrix, non_computable_cells, model_type)
     
     print(f"PC stability analysis for {model_type} complete.")
