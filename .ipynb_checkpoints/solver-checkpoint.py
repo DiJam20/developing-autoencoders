@@ -9,7 +9,7 @@ import argparse
 import time
 from tqdm import tqdm
 
-from autoencoder import LinearAutoencoder, NonLinearAutoencoder, ConvAutoencoder
+from autoencoder import LinearAutoencoder, NonLinearAutoencoder
 
 
 
@@ -61,27 +61,6 @@ def train_vali_all_epochs(model,train_loader,vali_loader,optimizer,n_epochs,devi
 	print('All train losses saved.')
 	return train_losses, vali_losses
 
-def continue_train_vali_all_epochs(model,train_loader,vali_loader,optimizer,n_epochs,more_epochs,device,save_path=None):
-	train_losses = []
-	vali_losses = []
-	all_train_losses = []
-	for epoch in range(more_epochs):
-		train_loss,train_loss_per_batch = train(model,train_loader,optimizer,epoch,device)
-		vali_loss,_,_ = test(model,vali_loader,device)
-		train_losses.append(train_loss)
-		all_train_losses.append(train_loss_per_batch)
-		vali_losses.append(vali_loss)
-		if save_path is not None:
-			if not os.path.exists(save_path):
-				os.makedirs(save_path)
-				print('Directory created:', save_path)
-			torch.save(model.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(n_epochs + epoch))
-			print('Weights saved.')
-	np.save(save_path + 'all_train_losses_{}.npy'.format(more_epochs),all_train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
-
-
 def size_per_epoch(size_ls,n_epochs,type='step'):
 	if type == 'constant':
 		size_epoch = [size_ls[0]]*n_epochs
@@ -91,8 +70,6 @@ def size_per_epoch(size_ls,n_epochs,type='step'):
 		size_epoch = np.repeat(size_ls,rep)
 		if n_epochs - len(size_epoch) > 0:
 			size_epoch = np.append(size_epoch,[size_ls[-1]]*(n_epochs - len(size_epoch)))
-	elif type == 'ecaxt':
-		size_epoch = size_ls
 	return size_epoch
 
 def varying_dim(A, B):
@@ -145,7 +122,7 @@ def divide_latent_tensor(tensor, new_dim):
 	mean = tensor.view(-1).mean()  
 	std = tensor.view(-1).std() 
 	# add a little noise to the old weights
-	new_tensor[:, :multiple*tensor_size[1]] += torch.normal(mean=mean, std=std, size=(lines, multiple*tensor_size[1]))
+	new_tensor[:, :multiple*tensor_size[1]] += torch.normal(mean=mean, std=0.1*std, size=(lines, multiple*tensor_size[1]))
 	# Fill the rest of the new tensor with random values.
 	new_tensor[:, multiple*tensor_size[1]:] = torch.normal(mean=mean, std=std, size=(lines, rest)) 
 	if one_dim:
@@ -153,95 +130,6 @@ def divide_latent_tensor(tensor, new_dim):
 	if gpu:
 		new_tensor.to('gpu')
 	return new_tensor
-
-
-def extend_tensor_with_noise(tensor, new_dim, dim=0):
-    """
-	Fills tensor with noise to match new_dim along the specified dimension.
-	Noise is drawn from a normal distribution with mean and standard deviation
-	based on the original tensor values.
-	1D tensors (biases) are extended along dimension 0.
-	2D tensors (weights) are extended along dimension 0 for encoder weights
-	and along dimension 1 for decoder weights.
-	Encoder (dim 0)
-		w1,1 w1,2 ... w1,128	-->		w1,1 w1,2 ... w1,128
-		...						-->		...
-		w4,1 w4,2 ... w4,128 	-->		...
-										w4,1 w4,2 ... w4,128
-	Decoder (dim 1)
-		w1,1 w1,2 ... w1,4		-->		w1,1 w1,2 ... w1,4 ... w1,8
-		...						-->		...
-		w128,1 w128,2 ... w128,4-->		w128,1 w128,2 ... w128,4 ... w128,8
-    """
-    # Get tensor shape
-    tensor_shape = tensor.shape
-    tensor_dims = len(tensor_shape)
-    
-    # If tensor is 1D and we're trying to extend along second dimension, that's an error
-    if tensor_dims == 1 and dim == 1:
-        raise ValueError("Cannot extend a 1D tensor along dimension 1")
-    
-    # If new dimension is not larger, return the original tensor (not a slice)
-    if new_dim <= tensor_shape[dim]:
-        return tensor
-    
-    if tensor_dims == 1:  # 1D tensor (bias)
-        old_dim = tensor_shape[0]
-        
-        # Create a new tensor with the desired size
-        new_tensor = torch.zeros(new_dim, device=tensor.device)
-        
-        # Copy the original values
-        new_tensor[:old_dim] = tensor
-        
-        # Calculate mean and standard deviation
-        mean = tensor.mean()
-        std = tensor.std()
-        
-        # Fill the rest with noise
-        new_tensor[old_dim:] = torch.normal(mean=mean, std=std, size=(new_dim - old_dim,))
-        
-    elif tensor_dims == 2:  # 2D tensor (weight matrix)
-        # Handle extension along different dimensions
-        if dim == 0:  # Extend along first dimension (for encoder weights)
-            old_dim = tensor_shape[0]
-            weight_size = tensor_shape[1]
-            
-            # Create new tensor
-            new_tensor = torch.zeros(new_dim, weight_size, device=tensor.device)
-            
-            # Copy original values
-            new_tensor[:old_dim] = tensor
-            
-            # Calculate stats
-            mean = tensor.mean()
-            std = tensor.std()
-            
-            # Fill rest with noise
-            new_tensor[old_dim:] = torch.normal(mean=mean, std=std, size=(new_dim - old_dim, weight_size))
-            
-        elif dim == 1:  # Extend along second dimension (for decoder weights)
-            old_dim = tensor_shape[1]
-            weight_size = tensor_shape[0]
-            
-            # Create new tensor
-            new_tensor = torch.zeros(weight_size, new_dim, device=tensor.device)
-            
-            # Copy original values
-            new_tensor[:, :old_dim] = tensor
-            
-            # Calculate stats
-            mean = tensor.mean()
-            std = tensor.std()
-            
-            # Fill rest with noise
-            new_tensor[:, old_dim:] = torch.normal(mean=mean, std=std, size=(weight_size, new_dim - old_dim))
-    
-    # Handle GPU device if needed
-    if tensor.device.type == 'gpu':
-        new_tensor = new_tensor.to('gpu')
-        
-    return new_tensor
 
 def divide_enc_tensor(tensor, new_dim):
 	"""
@@ -263,7 +151,7 @@ def divide_enc_tensor(tensor, new_dim):
 	std_dev = tensor.std(dim=1).std()
 
 	# add noise to the new weights
-	noise = torch.normal(mean=mean, std=std_dev, size=(old_dim*(multiple-1), weight_size))
+	noise = torch.normal(mean=mean, std=0.1*std_dev, size=(old_dim*(multiple-1), weight_size))
 	div_tensor[old_dim:] += noise
 
 	# Generate new samples based on a normal distribution with similar statistics
@@ -322,59 +210,15 @@ def l_develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
 
 	return autoencoder
 
-
-def nl_develope_AE(new_n_hidden_ls, hyperparam, save_path, epoch, manner='naiv'):
-    new_size = new_n_hidden_ls[-1]
-    # Create new autoencoder with corresponding bottleneck size.
-    n_layers = hyperparam['n_layers']
-    autoencoder = NonLinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, n_layers)
-
-    # Load the weights learned in the last epoch.
-    state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
-    num_weights = state_dict["encoder.encoder_{}.weight".format(n_layers)].size(1)  
-    # Use different manners to determine the new weights.
-    if manner == 'naiv':
-        new_weights_encoder = torch.randn(new_size, num_weights)
-        new_bias_encoder = torch.randn(new_size)
-        new_weights_decoder = torch.randn(num_weights, new_size)
-    elif manner == 'cell_division':
-        # In the following three lines, a part of the new, randomly initialized, weights get assigned
-        # to the weights that were learned in the last epoch.
-        new_weights_encoder = divide_enc_tensor(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size)
-        new_bias_encoder = divide_latent_tensor(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size)
-        new_weights_decoder = divide_latent_tensor(state_dict["decoder.decoder_1.weight"], new_size)
-    elif manner == 'gaussian':
-        # Important: For encoder weights and bias, extend along dimension 0
-        # For decoder weights, extend along dimension 1
-        new_weights_encoder = extend_tensor_with_noise(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size, dim=0)
-        new_bias_encoder = extend_tensor_with_noise(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size, dim=0)
-        new_weights_decoder = extend_tensor_with_noise(state_dict["decoder.decoder_1.weight"], new_size, dim=1)
-        
-    # Use the new weights to update the state_dict.
-    state_dict["encoder.encoder_{}.weight".format(n_layers)] = new_weights_encoder
-    state_dict["encoder.encoder_{}.bias".format(n_layers)] = new_bias_encoder
-    state_dict["decoder.decoder_1.weight"] = new_weights_decoder
-    
-    # Debug checks for NaN values
-    print('debug nan in encoder weights', torch.isnan(state_dict["encoder.encoder_{}.weight".format(n_layers)]).sum())
-    print('debug nan in encoder bias', torch.isnan(state_dict["encoder.encoder_{}.bias".format(n_layers)]).sum())
-    print('debug nan in decoder weights', torch.isnan(state_dict["decoder.decoder_1.weight"]).sum())
-    
-    # Load the state dict into the model
-    autoencoder.load_state_dict(state_dict)
-
-    return autoencoder
-	
-
-
-def develope_convAE(new_size,save_path,epoch,manner='naiv'):
+def nl_develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
+	new_size = new_n_hidden_ls[-1]
 	# Create new autoencoder with corresponding bottleneck size.
-	n_layers = 11
-	autoencoder = ConvAutoencoder(new_size)
+	n_layers = hyperparam['n_layers']
+	autoencoder = NonLinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,n_layers)
 
 	# Load the weights learned in the last epoch.
 	state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
-	num_weights = state_dict["encoder.{}.weight".format(n_layers)].size(1)  
+	num_weights = state_dict["encoder.encoder_{}.weight".format(n_layers)].size(1)  
 	# Use different manners to determine the new weights.
 	if manner == 'naiv':
 		new_weights_encoder = torch.randn(new_size, num_weights)
@@ -383,21 +227,21 @@ def develope_convAE(new_size,save_path,epoch,manner='naiv'):
 	elif manner == 'cell_division':
 		# In the following three lines, a part of the new, randomly initialized, weights get assigned
 		# to the weights that were learned in the last epoch.
-		new_weights_encoder = divide_enc_tensor(state_dict["encoder.{}.weight".format(n_layers)], new_size)
-		new_bias_encoder = divide_latent_tensor(state_dict["encoder.{}.bias".format(n_layers)], new_size)
-		new_weights_decoder = divide_latent_tensor(state_dict["linear.0.weight"], new_size)
+		new_weights_encoder = divide_enc_tensor(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size)
+		new_bias_encoder = divide_latent_tensor(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size)
+		new_weights_decoder = divide_latent_tensor(state_dict["decoder.decoder_1.weight"], new_size)
 		
 	# Use the new weights to update the state_dict.
-	state_dict["encoder.{}.weight".format(n_layers)] = \
-		set_old_weights(new_weights_encoder, state_dict["encoder.{}.weight".format(n_layers)])
-	state_dict["encoder.{}.bias".format(n_layers)] = \
-		set_old_weights(new_bias_encoder, state_dict["encoder.{}.bias".format(n_layers)])
-	state_dict["linear.0.weight"] = \
-		set_old_weights(new_weights_decoder, state_dict["linear.0.weight"])
+	state_dict["encoder.encoder_{}.weight".format(n_layers)] = \
+		set_old_weights(new_weights_encoder, state_dict["encoder.encoder_{}.weight".format(n_layers)])
+	state_dict["encoder.encoder_{}.bias".format(n_layers)] = \
+		set_old_weights(new_bias_encoder, state_dict["encoder.encoder_{}.bias".format(n_layers)])
+	state_dict["decoder.decoder_1.weight"] = \
+		set_old_weights(new_weights_decoder, state_dict["decoder.decoder_1.weight"])
 	# use new state_dict to update model weights
-	print('debug nan in encoder weights',torch.isnan(state_dict["encoder.{}.weight".format(n_layers)]).sum())
-	print('debug nan in encoder bias',torch.isnan(state_dict["encoder.{}.bias".format(n_layers)]).sum())
-	print('debug nan in decoder weights',torch.isnan(state_dict["linear.0.weight"]).sum())
+	print('debug nan in encoder weights',torch.isnan(state_dict["encoder.encoder_{}.weight".format(n_layers)]).sum())
+	print('debug nan in encoder bias',torch.isnan(state_dict["encoder.encoder_{}.bias".format(n_layers)]).sum())
+	print('debug nan in decoder weights',torch.isnan(state_dict["decoder.decoder_1.weight"]).sum())
 	autoencoder.load_state_dict(state_dict)
 
 	return autoencoder
@@ -442,48 +286,6 @@ def l_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,op
 	print('All train losses saved.')
 	return train_losses, vali_losses
 
-def continue_nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,more_epochs,device,save_path=None):
-	if save_path is None:
-		save_path = './'
-	else:
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
-			print('Directory created:', save_path)
-	train_losses = []
-	all_train_losses = []
-	vali_losses = []
-	if len(size_ls) == more_epochs:
-		size_each_epoch = size_ls
-	else:
-		size_each_epoch = size_per_epoch(size_ls,more_epochs,type='step')
-	np.save(save_path + 'size_each_epoch_{}.npy'.format(more_epochs),size_each_epoch)
-	hyperparam = model.get_hyperparams()
-	print(size_each_epoch)
-
-	for epoch in range(more_epochs):
-		print(size_each_epoch[epoch])
-		# Create new autoencoder with corresponding bottleneck size.
-		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
-		# if epoch == 0:
-		# 	ae =NonLinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
-
-		# else:
-		# ae = nl_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
-		# optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
-		
-		train_loss,train_loss_per_batch = train(model,train_loader,optimizer,epoch,device)
-		vali_loss,_,_ = test(model,vali_loader,device)
-		train_losses.append(train_loss)
-		all_train_losses.append(train_loss_per_batch)
-		vali_losses.append(vali_loss)
-
-		# Save the weights of the last epoch.
-		torch.save(model.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch+n_epochs))
-		print('Weights saved.')
-	np.save(save_path + 'all_train_losses_{}.npy'.format(more_epochs),all_train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
-
 def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
 	if save_path is None:
 		save_path = './'
@@ -494,32 +296,22 @@ def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,o
 	train_losses = []
 	all_train_losses = []
 	vali_losses = []
-	if len(size_ls) == n_epochs:
-		size_each_epoch = size_ls
-	else:
-		size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
+	size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
 	np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
 	hyperparam = model.get_hyperparams()
 	print(size_each_epoch)
 
-	current_bottleneck_size = None
-	ae = None
-
 	for epoch in range(n_epochs):
 		print(size_each_epoch[epoch])
+		# Create new autoencoder with corresponding bottleneck size.
 		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
-		
-		# Only reinitialise autoencoder and optimiser when the bottleneck size increases
-		if size_each_epoch[epoch] != current_bottleneck_size or ae is None:
-			current_bottleneck_size = size_each_epoch[epoch]
+		if epoch == 0:
+			ae =NonLinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
 
-			if epoch == 0:
-				ae = NonLinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
-			else:
-				ae = nl_develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
-
-			optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
-		
+		else:
+			ae = nl_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
+			optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
+			
 		train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
 		vali_loss,_,_ = test(ae,vali_loader,device)
 		train_losses.append(train_loss)
@@ -638,62 +430,10 @@ def test_conv(model,test_loader):
 	for data, _ in test_loader:
 		data = Variable(data, volatile=True)
 		encoded, decoded = model(data)
-		test_loss += F.mse_loss(decoded, data).item()
+		test_loss += F.mse_loss(decoded, data, size_average=False).item()
 	test_loss /= len(test_loader)
 	print('====> Test set loss: {:.4f}'.format(test_loss))
 	return test_loss, decoded,data
-
-def train_vali_all_epochs_conv(model,train_loader,vali_loader,optimizer,n_epochs,device='cpu',save_path=None):
-	train_losses = []
-	vali_losses = []
-	for epoch in range(n_epochs):
-		train_loss = train_conv(model,train_loader,optimizer,epoch)
-		vali_loss,_,_ = test_conv(model,vali_loader)
-		train_losses.append(train_loss)
-		vali_losses.append(vali_loss)
-		if save_path is not None:
-			if not os.path.exists(save_path):
-				os.makedirs(save_path)
-				print('Directory created:', save_path)
-			torch.save(model.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-			print('Weights saved.')
-	return train_losses, vali_losses
-
-def dev_train_vali_all_epochs_conv(model,size_ls,train_loader,vali_loader,optimizer,n_epochs,device='cpu',save_path=None,manner='naiv'):
-	if save_path is None:
-		save_path = './'
-	else:
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
-			print('Directory created:', save_path)
-	train_losses = []
-	vali_losses = []
-	size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
-	np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
-	print(size_each_epoch)
-	for epoch in range(n_epochs):
-		new_size = size_each_epoch[epoch]
-		print('new size:',new_size)
-		# Create new autoencoder with corresponding bottleneck size.
-		if epoch == 0:
-			ae =ConvAutoencoder(size_each_epoch[epoch])
-		else:
-			ae = develope_convAE(new_size,save_path=save_path,epoch=epoch,manner=manner)
-			optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
-			
-		train_loss = train_conv(ae,train_loader,optimizer,epoch)
-		vali_loss,_,_ = test_conv(ae,vali_loader)
-		train_losses.append(train_loss)
-		vali_losses.append(vali_loss)
-
-		# Save the weights of the last epoch.
-		torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-		print('Weights saved.')
-	np.save(save_path + 'all_train_losses.npy',train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
-
-
 
 
 def train_vae(model,train_loader,optimizer,epoch):
