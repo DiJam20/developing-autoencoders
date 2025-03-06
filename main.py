@@ -20,17 +20,17 @@ def main():
             32, 32, 32, 32, 32, 32,
             32, 32, 32, 32, 32, 32,]
     
-    # analyze_pc_stability("sae", size_ls=None, num_models=10, num_epochs=60)
-    # analyze_pc_stability("dae", size_ls=size_ls, num_models=10, num_epochs=60)
+    analyze_pc_stability("sae", size_ls=None, num_models=10, num_epochs=60)
+    analyze_pc_stability("dae", size_ls=size_ls, num_models=10, num_epochs=60)
 
-    # compute_rfs("sae", size_ls=None, num_models=1, num_epochs=60)
-    # compute_rfs("dae", size_ls=size_ls, num_models=1, num_epochs=60)
+    compute_rfs("sae", size_ls=None, num_models=1, num_epochs=60)
+    compute_rfs("dae", size_ls=size_ls, num_models=1, num_epochs=60)
 
-    # analyze_rf_stability("sae", size_ls=None, num_models=1, num_epochs=60)
-    # analyze_rf_stability("dae", size_ls=size_ls, num_models=1, num_epochs=60)
+    analyze_rf_stability("sae", size_ls=None, num_models=1, num_epochs=60)
+    analyze_rf_stability("dae", size_ls=size_ls, num_models=1, num_epochs=60)
 
-    # compute_rf_specificity("sae", num_models=1, size_ls=None, num_epochs=60)
-    # compute_rf_specificity("dae", num_models=1, size_ls=size_ls, num_epochs=60)
+    compute_rf_specificity("sae", num_models=1, size_ls=None, num_epochs=60)
+    compute_rf_specificity("dae", num_models=1, size_ls=size_ls, num_epochs=60)
 
     compute_hidden_layer_activation("sae", num_models=1, num_epochs=3)
     compute_hidden_layer_activation("dae", num_models=1, num_epochs=3)
@@ -38,10 +38,9 @@ def main():
     plot_hidden_layer_activation("sae", 2)
     plot_hidden_layer_activation("dae", 2)
 
+    plot_power_spectra(1, 59)
 
-    # plot_power_spectra(1, 59)
-
-    # run_pc_noise_analysis(2)
+    run_pc_noise_analysis(2)
 
 if __name__ == "__main__":
     main()
