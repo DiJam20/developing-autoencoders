@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 from tqdm import tqdm
 from sklearn.decomposition import PCA
 
@@ -129,6 +130,92 @@ def compute_pc_noise_analysis(num_models, manipulated_neurons):
     np.save(result_file, results)
 
 
+def create_ranking_heatmaps(results, manipulated_neurons):
+    # First, get a sample to determine the number of neurons
+    sample_data = next(iter(results.values()))[0]
+    num_neurons = len(sample_data[0])  # Length of SAE diffs for first run
+    
+    # Initialize arrays to store mean activation differences
+    sae_activation_matrix = np.zeros((len(manipulated_neurons), num_neurons))
+    dae_activation_matrix = np.zeros((len(manipulated_neurons), num_neurons))
+    
+    # Calculate mean activation differences for each PC range and each neuron
+    for i, pc_range in enumerate(manipulated_neurons):
+        # Get all runs for this PC range
+        runs = results[pc_range]
+        
+        # Stack all SAE and DAE differences for this PC range
+        sae_diffs = np.vstack([run[0] for run in runs])
+        dae_diffs = np.vstack([run[1] for run in runs])
+        
+        # Calculate mean across runs
+        sae_mean = np.mean(sae_diffs, axis=0)
+        dae_mean = np.mean(dae_diffs, axis=0)
+        
+        # Store in matrices
+        sae_activation_matrix[i, :] = sae_mean
+        dae_activation_matrix[i, :] = dae_mean
+    
+    # Calculate rankings for each neuron (1 = highest activation difference)
+    sae_rankings = np.zeros_like(sae_activation_matrix, dtype=int)
+    dae_rankings = np.zeros_like(dae_activation_matrix, dtype=int)
+    
+    for neuron in range(num_neurons):
+        # Get activation differences for this neuron across all PC ranges
+        sae_neuron_diffs = sae_activation_matrix[:, neuron]
+        dae_neuron_diffs = dae_activation_matrix[:, neuron]
+        
+        # Calculate rankings using argsort and flipping so that 1 = highest activation difference
+        sae_rankings[:, neuron] = np.argsort(np.argsort(-sae_neuron_diffs)) + 1
+        dae_rankings[:, neuron] = np.argsort(np.argsort(-dae_neuron_diffs)) + 1
+    
+    # Create labels for PC ranges
+    pc_labels = [f"({r[0]}-{r[1]-1})" for r in manipulated_neurons]
+    
+    # Set up the figure
+    plt.rcParams.update({'font.size': 14})
+    
+    # SAE Heatmap
+    plt.figure(figsize=(max(12, num_neurons*0.4), 6))
+    sns.heatmap(sae_rankings, annot=True, fmt="d", cmap="Blues", 
+                cbar=True, square=True, linewidths=.5,
+                xticklabels=range(num_neurons),
+                yticklabels=pc_labels)
+    plt.title("SAE: PC Noise Impact Rankings", fontsize=16)
+    plt.xlabel("Neuron Index", fontsize=14)
+    plt.ylabel("Manipulated PC Range", fontsize=14)
+    plt.tight_layout()
+    plt.savefig(f"Results/pc_noise_heatmap_sae_rankings.png", dpi=300)
+    plt.close()
+    
+    # DAE Heatmap
+    plt.figure(figsize=(max(12, num_neurons*0.4), 6))
+    sns.heatmap(dae_rankings, annot=True, fmt="d", cmap="Reds", 
+                cbar=True, square=True, linewidths=.5,
+                xticklabels=range(num_neurons),
+                yticklabels=pc_labels)
+    plt.title("DAE: PC Noise Impact Rankings", fontsize=16)
+    plt.xlabel("Neuron Index", fontsize=14)
+    plt.ylabel("Manipulated PC Range", fontsize=14)
+    plt.tight_layout()
+    plt.savefig(f"Results/pc_noise_heatmap_dae_rankings.png", dpi=300)
+    plt.close()
+    
+    return sae_rankings, dae_rankings
+
+
+def analyze_and_visualize_pc_noise():
+    # Load the results
+    results_file = "Results/pc_noise.npy"
+    results = np.load(results_file, allow_pickle=True).item()
+    
+    manipulated_neurons = [(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)]
+    
+    sae_rankings, dae_rankings = create_ranking_heatmaps(results, manipulated_neurons)
+        
+    return sae_rankings, dae_rankings
+
+
 def run_pc_noise_analysis(num_models):
     manipulated_neurons = [(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)]
 
@@ -136,3 +223,5 @@ def run_pc_noise_analysis(num_models):
     results = np.load("Results/pc_noise.npy", allow_pickle=True).item()
 
     plot_neuron_comparison(results, manipulated_neurons, "Results/pc_noise.png")
+
+    analyze_and_visualize_pc_noise()
