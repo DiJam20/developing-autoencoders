@@ -10,6 +10,7 @@ Plots_png/
 Plots_svg/
 Stability_DAE_Plots/
 data/
+Results/
 
 # Virtual environment
 venv/
