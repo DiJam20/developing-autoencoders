@@ -151,7 +151,7 @@ def compute_neuron_activations(model_type: str, num_models: int = 40,
         return None
     
     # Load test images
-    test_images, _ = load_mnist_tensor()
+    test_images, _ = load_cifar_tensor()
     
     neurons_per_layer = [512, 128, 32, 128, 512]
     

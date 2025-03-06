@@ -33,8 +33,8 @@ def compute_activation_for_single_model(model_idx: int, model_type: str, rf_matr
         model_path = f"/home/kong/cifar_models/cnn/{run_id}/{model_type}/{model_idx}"
         ae = load_conv_model(model_path, model_type=model_type, epoch=epoch, size_ls=size_ls)
         
-        num_neurons = size_ls[epoch] if model_type == "dae" else 32
-        max_size = 32
+        num_neurons = size_ls[epoch] if model_type == "dae" else 128
+        max_size = 128
         
         # Get RFs for current epoch
         rf_ls = rf_matrix[epoch][:num_neurons]
@@ -42,7 +42,8 @@ def compute_activation_for_single_model(model_idx: int, model_type: str, rf_matr
         # Process each RF
         epoch_activations = []
         with torch.no_grad():
-            inputs = torch.tensor(np.stack(rf_ls), dtype=torch.float32).reshape(len(rf_ls), -1)
+            # inputs = torch.tensor(np.stack(rf_ls), dtype=torch.float32).reshape(len(rf_ls), -1)
+            inputs = torch.tensor(np.stack(rf_ls), dtype=torch.float32)
             encoded, _ = ae(inputs)
             absolute_encoded = torch.abs(encoded)
             epoch_activations = absolute_encoded.cpu().numpy()

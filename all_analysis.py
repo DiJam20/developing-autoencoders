@@ -22,8 +22,8 @@ def main():
     # analyze_rf_stability("sae", size_ls=None, num_models=1, num_epochs=num_epoch)
     # analyze_rf_stability("dae", size_ls=size_ls, num_models=1, num_epochs=num_epoch)
 
-    compute_rf_specificity("sae", num_models=1, size_ls=None, num_epochs=num_epoch)
-    compute_rf_specificity("dae", num_models=1, size_ls=size_ls, num_epochs=num_epoch)
+    # compute_rf_specificity("sae", num_models=1, size_ls=None, num_epochs=num_epoch)
+    # compute_rf_specificity("dae", num_models=1, size_ls=size_ls, num_epochs=num_epoch)
 
     compute_hidden_layer_activation("sae", num_models=1, num_epochs=10, epoch=9)
     compute_hidden_layer_activation("dae", num_models=1, num_epochs=num_epoch, epoch=9, size_ls=size_ls)
