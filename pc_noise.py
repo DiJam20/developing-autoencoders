@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import BoundaryNorm, ListedColormap
 import seaborn as sns
 from tqdm import tqdm
 from sklearn.decomposition import PCA
@@ -175,12 +176,35 @@ def create_ranking_heatmaps(results, manipulated_neurons):
     # Set up the figure
     plt.rcParams.update({'font.size': 14})
     
+    xtick_positions = [0, 15, 31]
+    xtick_labels = [1, 16, 32]
+    
+    blues = plt.cm.Blues_r(np.linspace(0, 1, 5))
+    discrete_blues = ListedColormap(blues)
+    reds = plt.cm.Reds_r(np.linspace(0, 1, 5))
+    discrete_reds = ListedColormap(reds)
+    
+    bounds = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]
+    norm = BoundaryNorm(bounds, 5)
+    
     # SAE Heatmap
-    plt.figure(figsize=(max(12, num_neurons*0.4), 6))
-    sns.heatmap(sae_rankings, annot=True, fmt="d", cmap="Blues", 
+    plt.figure(figsize=(max(12, num_neurons*0.4), 3))
+    
+    ax = sns.heatmap(sae_rankings, annot=False, cmap=discrete_blues, 
                 cbar=True, square=True, linewidths=.5,
-                xticklabels=range(num_neurons),
+                norm=norm,
+                xticklabels=range(1, num_neurons+1),
                 yticklabels=pc_labels)
+    
+    ax.set_xticks([p + 0.5 for p in xtick_positions])
+    ax.set_xticklabels(xtick_labels)
+    
+    cbar = ax.collections[0].colorbar
+    cbar.set_ticks([1, 2, 3, 4, 5])
+    cbar.set_ticklabels([1, 2, 3, 4, 5])
+    cbar.minorticks_off()
+    cbar.ax.invert_yaxis()
+    
     plt.title("SAE: PC Noise Impact Rankings", fontsize=16)
     plt.xlabel("Neuron Index", fontsize=14)
     plt.ylabel("Manipulated PC Range", fontsize=14)
@@ -189,11 +213,23 @@ def create_ranking_heatmaps(results, manipulated_neurons):
     plt.close()
     
     # DAE Heatmap
-    plt.figure(figsize=(max(12, num_neurons*0.4), 6))
-    sns.heatmap(dae_rankings, annot=True, fmt="d", cmap="Reds", 
+    plt.figure(figsize=(max(12, num_neurons*0.4), 3))
+    
+    ax = sns.heatmap(dae_rankings, annot=False, cmap=discrete_reds, 
                 cbar=True, square=True, linewidths=.5,
-                xticklabels=range(num_neurons),
+                norm=norm,
+                xticklabels=range(1, num_neurons+1),
                 yticklabels=pc_labels)
+    
+    ax.set_xticks([p + 0.5 for p in xtick_positions])
+    ax.set_xticklabels(xtick_labels)
+    
+    cbar = ax.collections[0].colorbar
+    cbar.set_ticks([1, 2, 3, 4, 5])
+    cbar.set_ticklabels([1, 2, 3, 4, 5])
+    cbar.minorticks_off()
+    cbar.ax.invert_yaxis()
+    
     plt.title("DAE: PC Noise Impact Rankings", fontsize=16)
     plt.xlabel("Neuron Index", fontsize=14)
     plt.ylabel("Manipulated PC Range", fontsize=14)
