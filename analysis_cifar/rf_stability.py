@@ -178,7 +178,7 @@ def create_heatmap(model_type: str) -> None:
     """
     angle_matrix, non_computable_cells = compute_average_angles_matrix(model_type)
     
-    fig, ax = plt.subplots(figsize=(12, 7), dpi=300)
+    fig, ax = plt.subplots(figsize=(10, 6), dpi=300)
 
     heatmap = sns.heatmap(
         angle_matrix[:, :],
@@ -186,8 +186,8 @@ def create_heatmap(model_type: str) -> None:
         vmin=0,
         vmax=90,
         cbar_kws={"label": "Angle between PCs"},
-        linewidths=0.5,
-        square=True,
+        linewidths=0.01,
+        # square=True,
     )
 
     if model_type == "dae":
@@ -197,8 +197,8 @@ def create_heatmap(model_type: str) -> None:
             cmap=cmap_grey,
             cbar=False,
             alpha=1,
-            linewidths=0.5,
-            square=True,
+            linewidths=0.01,
+            # square=True,
         )
 
     cbar = heatmap.collections[0].colorbar

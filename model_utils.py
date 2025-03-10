@@ -77,7 +77,8 @@ def load_cifar_tensor():
         test_labels[current_idx:current_idx + batch_size] = labels
         
         for i in range(batch_size):
-            tensor_test_images.append(images[i].flatten())
+            # tensor_test_images.append(images[i].flatten())
+            tensor_test_images.append(images[i])
         
         current_idx += batch_size
 
@@ -120,7 +121,13 @@ def load_model(model_path, model_type, epoch, size_ls=None):
 
 def load_conv_model(model_path, model_type, epoch,size_ls=None):
     if size_ls is None:
-        size_ls = [128]
+        size_ls = [  6,   6,   6,  6,   6,   6,   6,  
+                   10,  10,  10,  10,  10,  10,  10,
+                16,  16,  16,  16,16,  16,  16,  
+                28,  28,  28,  28,  28,  28,  28,
+                    48,  48,  48,  48,  48,  48,  48,
+                        90,90,  90,  90,  90,  90,  90,
+                          128, 128, 128, 128, 128, 128, 128, 128]
     print(size_ls[-1])
     if model_type == "sae":
         model = ConvAutoencoder(latent_dim=size_ls[-1])

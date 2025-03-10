@@ -64,7 +64,7 @@ def calculate_angles_for_single_model(model_idx, model_type, size_ls=None, num_e
     # Calculate latent matrices for each epoch
     for epoch in tqdm(range(num_epochs), desc=f"Model {model_idx} epochs", leave=False):
         latent_matrix = []
-        run_id = '2025-03-05_13:59:06'
+        run_id = '2025-03-07_13:13:33'
         model_path = f"/home/kong/cifar_models/cnn/{run_id}/{model_type}/{model_idx}"
         ae = load_conv_model(model_path, model_type=model_type, epoch=epoch, size_ls=size_ls)
         

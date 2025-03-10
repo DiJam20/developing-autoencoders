@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
 
 	latent_dim = 128
-	n_epochs = 55
+	n_epochs = 60
 
 	repeat = 5
 	for rep in range(repeat):	
@@ -117,17 +117,22 @@ if __name__ == '__main__':
 		if not os.path.exists(rep_plot_path):
 			os.makedirs(rep_plot_path)
 		sae_model, sae_train_loss, sae_validation_loss = train_sae(save_path+'sae/{}/'.format(rep),latent_dim,n_epochs=n_epochs,device=device)
+		np.save(save_path+'sae/{}/train_loss.npy'.format(rep),sae_train_loss)
+		np.save(save_path+'sae/{}/vali_loss.npy'.format(rep),sae_validation_loss)
 		
 		# size_ls = [6,10,16,28,48,90,128]#,196,256]
 		size_ls = [  6,   6,   6,   6,   6,   6,    # 6
 					10,  10,  10,  10,  10,  10,    # 6
 					16,  16,  16,  16,  16,  16,    # 6
-					28,  28,  28,  28,  28,  28,  28,  # 7
-					48,  48,  48,  48,  48,  48,  48,  48, # 8
-					90,  90,  90,  90,  90,  90,  90,  90, #8
-					128, 128, 128, 128, 128, 128, 128, 128, 128, 128,128,128,128,128, # 14
+					28,  28,  28,  28,  28,  28,    # 6
+					48,  48,  48,  48,  48,  48,  48,  48, 48, # 9
+					90,  90,  90,  90,  90,  90,  90,  90,  90,  90, #10
+					128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
+					128, 128, 128, 128, 128, 128, 128 # 17
 					]
 		dae_model, dae_train_loss, dae_validation_loss = train_dae(save_path+'dae/{}/'.format(rep),latent_dim,size_ls,n_epochs=n_epochs)
+		np.save(save_path+'dae/{}/train_loss.npy'.format(rep),dae_train_loss)
+		np.save(save_path+'dae/{}/vali_loss.npy'.format(rep),dae_validation_loss)
 
 		fig = plt.figure(figsize=(10,5))
 		plt.subplot(1,2,1)

@@ -42,7 +42,7 @@ def compute_rf_for_single_model(model_idx: int, model_type: str, size_ls: list =
         # input = data.view(data.size(0), -1)
         input.requires_grad_(True)
         
-        run_id = '2025-03-05_13:59:06'
+        run_id = '2025-03-07_13:13:33'
         model_path = f"/home/kong/cifar_models/cnn/{run_id}/{model_type}/{model_idx}"
         ae = load_conv_model(model_path, model_type=model_type, epoch=epoch, size_ls=size_ls)
         # ae = load_conv_model(f'/home/david/mnist_model/{model_type}/{model_idx}', model_type, epoch)

@@ -15,13 +15,7 @@ from solver import *
 # TODO plot zero activation in bottleneck barchart (18)
 # TODO plot mean activation for bottleneck (18)
 
-layers_to_measure = [
-    'encoder_activation_1',
-    'encoder_activation_2',
-    'encoder_activation_3',
-    'decoder_activation_1',
-    'decoder_activation_2'
-]
+layers_to_measure = [ 'encoder_0', 'encoder_2',  'encoder_4',  'encoder_6', 'encoder_8', 'encoder_11']
 
 
 def get_avg_activations(activations: dict) -> list:
@@ -43,7 +37,7 @@ def get_zero_activations(activations: dict) -> list:
     return zero_percentages
 
 
-def get_model_activations(model: NonLinearAutoencoder, image: torch.Tensor) -> list:
+def get_model_activations(model: ConvAutoencoder, image: torch.Tensor) -> list:
     """Get raw activations for each neuron in each layer."""
     with torch.no_grad():
         _, _, activations = model.forward(
@@ -53,13 +47,15 @@ def get_model_activations(model: NonLinearAutoencoder, image: torch.Tensor) -> l
 
     layer_activations = []
     for layer in layers_to_measure:
+        # print('debug: layer', layer)
+        # print('debug: activations keys', activations.keys())
         act = activations[layer]
         layer_activations.append(act.detach().cpu())
     
     return layer_activations
 
 
-def evaluate_model_activations(model_type: str, tensor_test_images: torch.Tensor, ae: NonLinearAutoencoder) -> list:
+def evaluate_model_activations(model_type: str, tensor_test_images: torch.Tensor, ae: ConvAutoencoder) -> list:
     """
     Compute average activations across all test images for each neuron.
     
@@ -76,6 +72,7 @@ def evaluate_model_activations(model_type: str, tensor_test_images: torch.Tensor
     
     # Process all images
     for img in tensor_test_images:
+        img = img.unsqueeze(0)
         layer_acts = get_model_activations(ae, img)
         
         # Store activations for each layer
@@ -86,11 +83,11 @@ def evaluate_model_activations(model_type: str, tensor_test_images: torch.Tensor
     avg_layer_acts = []
     for i in range(len(all_layer_acts)):
         stacked_acts = torch.stack(all_layer_acts[i])
-        avg_acts = torch.mean(stacked_acts, dim=0).numpy()
+        avg_acts = torch.squeeze(torch.mean(stacked_acts, dim=0)).numpy()
         
         # Pad the activations for the DAE's bottleneck layer
-        if model_type == 'dae' and i == 2 and len(avg_acts) < 32:
-            padding_size = 32 - len(avg_acts)
+        if model_type == 'dae' and i == 2 and len(avg_acts) < 128:
+            padding_size = 128 - len(avg_acts)
             padding = np.full(padding_size, np.nan)
             avg_acts = np.concatenate([avg_acts, padding])
         
@@ -113,18 +110,26 @@ def compute_activation_for_single_model(model_idx: int, model_type: str, test_im
     Returns:
         np.ndarray: Array of average activations with shape (num_epochs, num_layers, max_neurons)
     """
-    neurons_per_layer = [512, 128, 32, 128, 512]
+    neurons_per_layer = [ 128]
     
     # Initialize results with shape (num_epochs, num_layers, max_neurons)
     results = np.full((num_epochs, len(layers_to_measure), max(neurons_per_layer)), np.nan)
     
     for epoch in tqdm(range(num_epochs), desc=f"Model {model_idx} epochs", leave=False):
-        ae = load_model(f'/home/david/mnist_model/{model_type}/{model_idx}', model_type, epoch)
+        # ae = load_model(f'/home/david/mnist_model/{model_type}/{model_idx}', model_type, epoch)
+        run_id = '2025-03-05_13:59:06'
+        model_path = f"/home/kong/cifar_models/cnn/{run_id}/{model_type}/{model_idx}"
+        ae = load_conv_model(model_path, model_type=model_type, epoch=epoch)
         layer_avgs = evaluate_model_activations(model_type, test_images, ae)
         
         # Store results
+        # print('debug: layer_avgs', layer_avgs)
         for layer_idx, layer_avg in enumerate(layer_avgs):
+            if len(layer_avg.shape) == 2 and layer_avg.shape[0] == 1:
+                layer_avg = layer_avg[0]
             num_neurons = len(layer_avg)
+            # print('debug: layer_avg', layer_avg)
+            # print('debug: num_neurons', num_neurons)
             results[epoch, layer_idx, :num_neurons] = layer_avg
     
     return results
@@ -153,7 +158,7 @@ def compute_neuron_activations(model_type: str, num_models: int = 40,
     # Load test images
     test_images, _ = load_cifar_tensor()
     
-    neurons_per_layer = [512, 128, 32, 128, 512]
+    neurons_per_layer = [128]
     
     # Initialize all_results with shape: (num_models, num_epochs, num_layers, max_neurons)
     all_results = np.full((num_models, num_epochs, len(layers_to_measure), max(neurons_per_layer)), np.nan)
@@ -184,8 +189,8 @@ def plot_neuron_activations(model_type: str, epoch: int = 59) -> None:
     neuron_activations = np.load(f"Results/{model_type}_hidden_layer_neuron_activations.npy")
 
     # Find average and standard deviation of activations for each layer
-    avg_layer_acts = np.array([np.nanmean(neuron_activations[:, epoch, i, :]) for i in range(5)])
-    std_layer_acts = np.array([np.nanstd(neuron_activations[:, epoch, i, :]) for i in range(5)])
+    avg_layer_acts = np.array([np.nanmean(neuron_activations[:, epoch, i, :]) for i in range(1)])
+    std_layer_acts = np.array([np.nanstd(neuron_activations[:, epoch, i, :]) for i in range(1)])
 
     plt.rc('font', size=16)
 
@@ -203,7 +208,7 @@ def plot_neuron_activations(model_type: str, epoch: int = 59) -> None:
         model_type = 'Dev-AE'
     plt.title(f'Neuron Activation Across Hidden Layers ({model_type})')
     plt.ylabel('Mean Activation Value')
-    plt.xticks(range(5), ['Encoder [512]', 'Encoder [128]', 'Bottleneck [32]', 'Decoder [128]', 'Decoder [512]'])
+    plt.xticks(range(1), ['Bottleneck [128]'])
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -228,10 +233,10 @@ def plot_zero_activations(model_type: str, epoch: int = 59, size_ls: list = None
     """
     neuron_activations = np.load(f"Results/{model_type}_hidden_layer_neuron_activations.npy")
     
-    zero_percentages = np.zeros(5)
+    zero_percentages = np.zeros(1)
     
     # Calculate zero percentages for each layer with given epoch
-    for layer_idx in range(5):
+    for layer_idx in range(1):
         all_activations = neuron_activations[:, epoch, layer_idx, :]
         all_activations = np.concatenate(all_activations, axis=0)
         num_zeros = np.sum(all_activations == 0)
@@ -253,7 +258,7 @@ def plot_zero_activations(model_type: str, epoch: int = 59, size_ls: list = None
     plt.title('Percentage of 0s Across Hidden Layers')
     plt.ylabel('Percentage of 0s')
     plt.ylim(0, 100)
-    plt.xticks(range(5), ['Encoder [512]', 'Encoder [128]', 'Bottleneck [32]', 'Decoder [128]', 'Decoder [512]'])
+    plt.xticks(range(1), ['Bottleneck [128]'])
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -270,8 +275,10 @@ def activations_heatmap(model_type: str) -> None:
     Plot heatmap of neuron activations over all epochs.
     """
     neuron_activations = np.load(f"Results/{model_type}_hidden_layer_neuron_activations.npy")
-    epoch_activations_mean = np.mean(neuron_activations[:, :, 2, :32], axis=0) # CIFAR BOTTLENECK DIFFERENT
+    print('debug: neuron_activations', neuron_activations.shape)
+    epoch_activations_mean = np.mean(neuron_activations[:, :, 0, :127], axis=0) # CIFAR BOTTLENECK DIFFERENT
     epoch_activations_mean = epoch_activations_mean.T
+    print('debug: epoch_activations_mean', epoch_activations_mean.shape)
 
     fig, ax = plt.subplots(figsize=(12, 7), dpi=300)
 
@@ -305,8 +312,9 @@ def activations_heatmap(model_type: str) -> None:
 
 def plot_activation_distribution(model_type: str, epoch: int) -> None:
     neuron_activations = np.load(f"Results/{model_type}_hidden_layer_neuron_activations.npy")
+    # print('debug: neuron_activations', neuron_activations.shape)
 
-    data = neuron_activations[:, epoch, 2, :32] # CIFAR BOTTLENECK DIFFERENT
+    data = neuron_activations[:, epoch, 0, :128] # CIFAR BOTTLENECK DIFFERENT
     print(data.shape)
 
     fig, ax = plt.subplots(figsize=(12, 6), dpi=300)

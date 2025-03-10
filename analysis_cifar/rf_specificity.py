@@ -29,7 +29,7 @@ def compute_activation_for_single_model(model_idx: int, model_type: str, rf_matr
     
     for epoch in tqdm(range(num_epochs), desc=f"Model {model_idx} epochs", leave=False):
         # ae = load_conv_model(f'/home/david/mnist_model/{model_type}/{model_idx}', model_type, epoch)
-        run_id = '2025-03-05_13:59:06'
+        run_id = '2025-03-07_13:13:33'
         model_path = f"/home/kong/cifar_models/cnn/{run_id}/{model_type}/{model_idx}"
         ae = load_conv_model(model_path, model_type=model_type, epoch=epoch, size_ls=size_ls)
         

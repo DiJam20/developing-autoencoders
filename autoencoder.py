@@ -137,7 +137,7 @@ class ConvAutoencoder(nn.Module):
 		self.encoder = nn.Sequential(
 			# size: batch x 3 x 32 x 32
 			#in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True
-			nn.Conv2d(3,c_hid,kernel_size=3,stride=2,padding=1),
+			nn.Conv2d(3,c_hid,kernel_size=3,stride=2,padding=1), # 32x32 => 16x16
 			nn.ReLU(True),
             nn.Conv2d(c_hid, c_hid, kernel_size=3, padding=1),
             nn.ReLU(True),
@@ -148,7 +148,7 @@ class ConvAutoencoder(nn.Module):
             nn.Conv2d(2*c_hid, 2*c_hid, kernel_size=3, padding=1, stride=2), # 8x8 => 4x4
             nn.ReLU(True),
             nn.Flatten(), # Image grid to single feature vector
-            nn.Linear(2*16*c_hid, latent_dim)
+            nn.Linear(2*16*c_hid, latent_dim) # 2*16*c_hid = 2*16*32 = 1024
 		)
 		## convtranspose2d output size = (input_size-1)*stride - 2*padding + kernel_size + output_padding
 		## H_out ​= (H_in​−1)*stride[0] − 2×padding[0] + dilation[0]×(kernel_size[0]−1) + output_padding[0] + 1
@@ -170,15 +170,36 @@ class ConvAutoencoder(nn.Module):
 			nn.Tanh() # The input images is scaled between -1 and 1, hence the output has to be bounded as well
 		)
 
-	def forward(self,x):
+	def forward(self,x,return_activations=False):
+		if return_activations:
+			activations = {}
+			def get_activation(name):
+				def hook(model, input, output):
+					activations[name] = output.detach()
+				return hook
+			# Register hooks for each layer
+			handles = []
+			for name, layer in self.encoder.named_children():
+				handles.append(layer.register_forward_hook(get_activation(f'encoder_{name}')))
+			for name, layer in self.decoder.named_children():
+				handles.append(layer.register_forward_hook(get_activation(f'decoder_{name}')))
+		
 		encoded = self.encoder(x)
 		encoded_linear = self.linear(encoded)
 		encoded_linear = encoded_linear.reshape(encoded_linear.shape[0], -1, 4, 4)
 		decoded = self.decoder(encoded_linear)
+		if return_activations:
+			# Remove hooks
+			for handle in handles:
+				handle.remove()
+			return encoded, decoded, activations
+		
 		return encoded, decoded
+	
 	def encode(self,x):
 		encoded = self.encoder(x)
 		return encoded
+	
 	def decode(self,x):
 		decoded = self.decoder(x)
 		return decoded

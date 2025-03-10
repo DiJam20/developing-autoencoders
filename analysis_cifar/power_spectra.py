@@ -98,13 +98,13 @@ def load_rfs(num_models: int, epoch: int) -> tuple:
 
         sae_power_spectrum = []
         for rf in sae_rfs:
-            radial_avg = power_spectrum_radial_average(z_score(rf.reshape(28, 28)))
+            radial_avg = power_spectrum_radial_average(z_score(rf.reshape(32, 32)))
             sae_power_spectrum.append(radial_avg)
         sae_power_spectra.append(sae_power_spectrum)
 
         dae_power_spectrum = []
         for rf in dae_rfs:
-            radial_avg = power_spectrum_radial_average(z_score(rf.reshape(28, 28)))
+            radial_avg = power_spectrum_radial_average(z_score(rf.reshape(32, 32)))
             dae_power_spectrum.append(radial_avg)
         dae_power_spectra.append(dae_power_spectrum)
 
