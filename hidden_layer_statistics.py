@@ -9,7 +9,7 @@ from model_utils import *
 from solver import *
 
 
-layers_to_measure = [
+nl_layers_to_measure = [
     'encoder_activation_1',
     'encoder_activation_2',
     'encoder_activation_3',
@@ -17,50 +17,84 @@ layers_to_measure = [
     'decoder_activation_2'
 ]
 
+conv_layers_to_measure = [
+    'encoder_0',
+    'encoder_2',
+    'encoder_4',
+    'encoder_6',
+    'encoder_8',
+    'encoder_10',
+    'linear_0',
+    'decoder_0',
+    'decoder_2',
+    'decoder_4',
+    'decoder_6',
+    'decoder_8'
+]
 
-def get_model_activations(model: NonLinearAutoencoder, image: torch.Tensor) -> list:
+
+def get_model_activations(model, image: torch.Tensor, model_arch='nonlinear') -> list:
     """
     Get activations for a model given an image.
     
     Args:
         model: Autoencoder model
         image: Image to evaluate
+        model_arch: Model architecture ('nonlinear' or 'conv')
         
     Returns:
         list: List of activations for each layer
     """
     with torch.no_grad():
-        _, _, activations = model.forward(
-            image, 
-            return_activations=True
-        )
-
-    layer_activations = []
-    for layer in layers_to_measure:
-        act = activations[layer]
-        layer_activations.append(act.detach().cpu())
+        if model_arch == 'nonlinear':
+            _, _, activations = model.forward(image, return_activations=True)
+            
+            layer_activations = []
+            for layer in nl_layers_to_measure:
+                act = activations[layer]
+                layer_activations.append(act.detach().cpu())
+        
+        elif model_arch == 'conv':
+            if image.dim() == 1:
+                # Reshape [3072] to [1, 3, 32, 32]
+                image = image.reshape(1, 3, 32, 32)
+                
+            _, _, activations = model.forward(image, return_activations=True)
+            
+            layer_activations = []
+            for layer in conv_layers_to_measure:
+                act = activations[layer]
+                # Flatten the activation from convolutional layers
+                if act.dim() > 2:
+                    act = act.flatten(1)
+                layer_activations.append(act.detach().cpu())
     
     return layer_activations
     
 
-def evaluate_model_activations(tensor_test_images: torch.Tensor, ae: NonLinearAutoencoder) -> list:
+def evaluate_model_activations(tensor_test_images: torch.Tensor, ae: NonLinearAutoencoder,
+                               model_arch: str) -> list:
     """
     Evaluate per-neuron activations for a model across test images.
 
     Args:
         tensor_test_images: List of test images to be given to the model
         ae: Autoencoder model
-        model_type: Type of model ('sae' or 'dae')
+        model_arch: Model architecture ('nonlinear' or 'conv')
 
     Returns:
         list: List of activation statistics for each layer
     """
-    neurons_per_layer = [512, 128, 32, 128, 512]
+    if model_arch == 'nonlinear':
+        layers_to_measure = nl_layers_to_measure
+    elif model_arch == 'conv':
+        layers_to_measure = conv_layers_to_measure
 
     all_layer_acts = [[] for _ in range(len(layers_to_measure))]
+    
     # Process all images
     for img in tensor_test_images:
-        layer_acts = get_model_activations(ae, img)
+        layer_acts = get_model_activations(ae, img, model_arch)
         
         # Store activations for each layer
         for i, acts in enumerate(layer_acts):
@@ -70,43 +104,164 @@ def evaluate_model_activations(tensor_test_images: torch.Tensor, ae: NonLinearAu
     results = []
     for i, layer_acts in enumerate(all_layer_acts):
         acts_tensor = torch.stack(layer_acts)
+
+        # If acts_tensor is multidimensional flatten it
+        if acts_tensor.dim() > 2:
+            # Keep only batch dimension
+            acts_tensor = acts_tensor.flatten(1)
         
-        # Calculate activation statistics per neuron
-        mean_acts = torch.mean(acts_tensor, dim=0).numpy()
-        std_acts = torch.std(acts_tensor, dim=0).numpy()
+        always_zero_mask = torch.all(acts_tensor == 0, dim=0)
+        never_zero_mask = torch.all(acts_tensor != 0, dim=0)
+        
+        # Count and calculate percentages
+        total_neurons = acts_tensor.shape[1]
+        always_zero_count = always_zero_mask.sum().item()
+        never_zero_count = never_zero_mask.sum().item()
+        sometimes_zero_count = total_neurons - always_zero_count - never_zero_count
+        
+        # Initialize arrays for statistics
+        mean_acts = np.zeros(total_neurons)
+        std_acts = np.zeros(total_neurons)
+        
+        # Calculate statistics for each neuron
+        for j in range(total_neurons):
+            if not always_zero_mask[j]:
+                # For sometimes active neurons, calculate mean and std including zeros
+                mean_acts[j] = acts_tensor[:, j].mean().item()
+                std_acts[j] = acts_tensor[:, j].std().item()
+                # For always zero neurons, mean and std remain 0
         
         # Calculate zero percentages per neuron
         zero_tensor = (acts_tensor == 0).float()
         mean_zeros = torch.mean(zero_tensor, dim=0).numpy() * 100
         std_zeros = torch.std(zero_tensor, dim=0).numpy() * 100
         
-        layer_stats = np.stack([mean_acts, std_acts, mean_zeros, std_zeros])
-            
+        # Create arrays to store the category percentages for each neuron
+        always_zero_arr = np.zeros(total_neurons)
+        never_zero_arr = np.zeros(total_neurons)
+        sometimes_zero_arr = np.zeros(total_neurons)
+        
+        # Fill arrays based on masks
+        always_zero_arr[always_zero_mask.cpu().numpy()] = 100
+        never_zero_arr[never_zero_mask.cpu().numpy()] = 100
+        sometimes_zero_arr[~(always_zero_mask | never_zero_mask).cpu().numpy()] = 100
+        
+        # Stack all statistics
+        layer_stats = np.stack([
+            mean_acts, std_acts, mean_zeros, std_zeros,
+            always_zero_arr, never_zero_arr, sometimes_zero_arr
+        ])
+        
         results.append(layer_stats)
     
     return results
 
 
-def compute_activation_for_single_model(model_idx: int, model_type: str, test_images: list, 
-                                        num_epochs: int = 60) -> list:
+def compute_activation_for_single_model(model_idx: int, model_type: str, 
+                                        test_images: list, model_arch: str, 
+                                        num_epochs: int, epoch: int) -> list:
     """
     Compute activations for a single model across all epochs.
 
     Args:
         model_type: Type of model ('sae' or 'dae')
         test_images: List of test images to be given to the model
+        model_arch: Model architecture ('nonlinear' or 'conv')
         num_epochs: Number of epochs to process
+        epoch: Epoch to evaluate
 
     Returns:
         list: Activation matrix for the model
     """
+
+    if model_arch == 'nonlinear':
+        layers_to_measure = nl_layers_to_measure
+        neurons_per_layer = [512, 128, 32, 128, 512]
+    elif model_arch == 'conv':
+        layers_to_measure = conv_layers_to_measure
+        neurons_per_layer = [
+            32*16*16,
+            32*16*16,
+            64*8*8,
+            64*8*8,
+            64*4*4,
+            128,
+            64*4*4,
+            64*8*8,
+            64*8*8,
+            32*16*16,
+            32*16*16,
+            3*32*32
+        ]
     
     num_layers = len(layers_to_measure)
-    neurons_per_layer = [512, 128, 32, 128, 512]
-    
-    # Initialize results: (num_epochs, num_layers, 4, max_neurons)
-    results = np.zeros((num_epochs, num_layers, 4, max(neurons_per_layer)))
+
+    results = np.zeros((num_layers, 7, max(neurons_per_layer)))
     results.fill(np.nan)
+    
+    if model_arch == 'nonlinear':
+        model = load_model(f'/home/david/mnist_model/{model_type}/{model_idx}', model_type, epoch)
+    elif model_arch == 'conv':
+        if model_type == 'sae':
+            model = load_conv_model(f'/home/david/cifar_model/{model_type}/{model_idx}', 
+                                  model_type, epoch)
+        else:
+            model = load_conv_model(f'/home/david/cifar_model/{model_type}/{model_idx}', 
+                                  model_type, epoch, [128] * (epoch + 1))
+    
+    layer_results = evaluate_model_activations(test_images, model, model_arch)
+    
+    # Store results for each layer
+    for layer_idx, layer_data in enumerate(layer_results):
+        num_neurons = layer_data.shape[1]
+        results[layer_idx, :, :num_neurons] = layer_data
+    
+    return results
+
+
+def compute_activation_over_epochs_for_single_model(model_idx: int, model_type: str, 
+                                        test_images: list, model_arch: str, 
+                                        num_epochs: int, epoch: int) -> list:
+    """
+    Compute activations for a single model across all epochs.
+
+    Args:
+        model_type: Type of model ('sae' or 'dae')
+        test_images: List of test images to be given to the model
+        model_arch: Model architecture ('nonlinear' or 'conv')
+        num_epochs: Number of epochs to process
+        epoch: Epoch to evaluate
+
+    Returns:
+        list: Activation matrix for the model
+    """
+
+    if model_arch == 'nonlinear':
+        layers_to_measure = nl_layers_to_measure
+        neurons_per_layer = [512, 128, 32, 128, 512]
+    elif model_arch == 'conv':
+        layers_to_measure = conv_layers_to_measure
+        neurons_per_layer = [
+            32*16*16,
+            32*16*16,
+            64*8*8,
+            64*8*8,
+            64*4*4,
+            128,
+            64*4*4,
+            64*8*8,
+            64*8*8,
+            32*16*16,
+            32*16*16,
+            3*32*32
+        ]
+    
+    num_layers = len(layers_to_measure)
+    
+    results = np.zeros((num_epochs, num_layers, 7, max(neurons_per_layer)))
+    results.fill(np.nan)
+
+    # Fix scenario of one epoch and different model types
     
     for epoch in tqdm(range(num_epochs), desc=f"Model {model_idx} epochs", leave=False):
         ae = load_model(f'/home/david/mnist_model/{model_type}/{model_idx}', model_type, epoch)
@@ -120,37 +275,62 @@ def compute_activation_for_single_model(model_idx: int, model_type: str, test_im
     return results
 
 
-def compute_neuron_activations(model_type: str, num_models: int = 40, 
-                               num_epochs: int = 60) -> None:
+def compute_neuron_activations(model_type, model_arch='nonlinear', num_models=40, num_epochs=10, epoch=59):
     """
-    Compute activations for all models across all epochs.
+    Compute activations for all models at a specific epoch.
     
     Args:
         model_type: Type of model ('sae' or 'dae')
+        model_arch: Type of architecture ('nonlinear' or 'conv')
+        dataset: Dataset name ('mnist' or 'cifar')
         num_models: Number of models to process
-        num_epochs: Number of epochs to process
+        epoch: Specific epoch to analyze (default: 59)
     
     Returns:
         None: Saves activation data for all models
     """
-    result_file = f'Results/{model_type}_hidden_layer_neuron_activations.npy'
+    if model_arch == 'nonlinear':
+        dataset = 'mnist'
+    elif model_arch == 'conv':
+        dataset = 'cifar'
+    result_file = f'Results/hidden_layer_act_{model_type}_{dataset}.npy'
     
     # Check if results already exist
     if os.path.exists(result_file):
         print(f"Loading existing results from {result_file}")
         return None
     
-    test_images, _ = load_mnist_tensor()
+    if model_arch == 'nonlinear':
+        test_images, _ = load_mnist_tensor()
+    elif model_arch == 'conv':
+        test_images, _ = load_cifar_tensor()
     
-    neurons_per_layer = [512, 128, 32, 128, 512]
+    if model_arch == 'nonlinear':
+        layers_to_measure = nl_layers_to_measure
+        neurons_per_layer = [512, 128, 32, 128, 512]
+    elif model_arch == 'conv':
+        layers_to_measure = conv_layers_to_measure
+        neurons_per_layer = [
+            32*16*16,
+            32*16*16,
+            64*8*8,
+            64*8*8,
+            64*4*4,
+            128,
+            64*4*4,
+            64*8*8,
+            64*8*8,
+            32*16*16,
+            32*16*16,
+            3*32*32
+        ]
     
-    # Initialize all_results: (num_models, num_epochs, num_layers, 4, neurons_per_layer)
-    all_results = np.zeros((num_models, num_epochs, len(layers_to_measure), 4, max(neurons_per_layer)))
+    all_results = np.zeros((num_models, len(layers_to_measure), 7, max(neurons_per_layer)))
     all_results.fill(np.nan)
     
     for model_idx in tqdm(range(num_models), desc="Processing models"):
         model_results = compute_activation_for_single_model(
-            model_idx, model_type, test_images, num_epochs
+            model_idx, model_type, test_images, model_arch, num_epochs, epoch
         )
         
         all_results[model_idx] = model_results
@@ -162,18 +342,20 @@ def compute_neuron_activations(model_type: str, num_models: int = 40,
     return None
 
 
-def compute_hidden_layer_activation(model_type: str, num_models: int = 40, 
-                                    num_epochs: int = 60) -> None:
+def compute_hidden_layer_activation(model_type, model_arch='nonlinear', 
+                                   num_models=40, num_epochs = 10, epoch=59):
     """
-    Compute RF specificity for all models.
+    Compute activation statistics for all models at a specific epoch.
     
     Args:
         model_type: Type of model ('sae' or 'dae')
+        model_arch: Type of architecture ('nonlinear' or 'conv')
+        dataset: Dataset name ('mnist' or 'cifar')
         num_models: Number of models to process
-        size_ls: List of sizes for DAE models
-        num_epochs: Number of epochs to process
+        epoch: Specific epoch to analyze
+        
     Results:
         None: Saves results to file
     """
-    compute_neuron_activations(model_type, num_models=num_models, num_epochs=num_epochs)
+    compute_neuron_activations(model_type, model_arch, num_models, num_epochs, epoch)
     return None
