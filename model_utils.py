@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import numpy as np
-from autoencoder import NonLinearAutoencoder
+from autoencoder import NonLinearAutoencoder, ConvAutoencoder
 
 def load_mnist():
     transform = transforms.Compose([
@@ -23,9 +23,50 @@ def load_mnist():
     test_loader = DataLoader(mnist_test, batch_size=batch_size, shuffle=False, num_workers=6)
     return train_loader, validation_loader, test_loader
 
+def load_cifar():
+    transform = transforms.Compose([
+        transforms.ToTensor(),  
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+
+    cifar_train = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    cifar_test = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+
+    train_size = int(len(cifar_train) * 0.8)
+    validation_size = len(cifar_train) - train_size
+    cifar_train, cifar_val = torch.utils.data.random_split(cifar_train, [train_size, validation_size])
+
+    batch_size = 128
+    train_loader = DataLoader(cifar_train, batch_size=batch_size, shuffle=True, num_workers=6)
+    validation_loader = DataLoader(cifar_val, batch_size=batch_size, shuffle=False, num_workers=6)
+    test_loader = DataLoader(cifar_test, batch_size=batch_size, shuffle=False, num_workers=6)
+    return train_loader, validation_loader, test_loader
+
 
 def load_mnist_tensor():
     _, _, test_loader = load_mnist()
+
+    tensor_test_images = []
+    test_labels = torch.zeros(10000, dtype=torch.long)
+
+    current_idx = 0
+    for images, labels in test_loader:
+        batch_size = images.size(0)
+        
+        test_labels[current_idx:current_idx + batch_size] = labels
+        
+        for i in range(batch_size):
+            tensor_test_images.append(images[i].flatten())
+        
+        current_idx += batch_size
+
+    tensor_test_images = torch.stack(tensor_test_images)
+
+    return tensor_test_images, test_labels
+
+
+def load_cifar_tensor():
+    _, _, test_loader = load_cifar()
 
     tensor_test_images = []
     test_labels = torch.zeros(10000, dtype=torch.long)
@@ -75,6 +116,23 @@ def load_model(model_path, model_type, epoch, size_ls=None):
         map_location=device, 
         weights_only=True
     )
+    model.load_state_dict(weights)
+    return model
+
+
+def load_conv_model(model_path, model_type, epoch, size_ls=None):
+    if size_ls is None:
+        size_ls = [128]
+    if model_type == "sae":
+        model = ConvAutoencoder(latent_dim=size_ls[-1])
+    else:
+        model = ConvAutoencoder(latent_dim=size_ls[epoch])
+    device = torch.device("cpu")
+    weights = torch.load(
+        f"{model_path}/model_weights_epoch{epoch}.pth", 
+        map_location=device, 
+        weights_only=True
+        )
     model.load_state_dict(weights)
     return model
 

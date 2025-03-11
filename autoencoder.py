@@ -130,41 +130,88 @@ class NonLinearAutoencoder(nn.Module):
 
 
 class ConvAutoencoder(nn.Module):
-	def __init__(self):
+	def __init__(self,latent_dim):
 		super(ConvAutoencoder,self).__init__()
+		c_hid = 32
+		self.latent_dim = latent_dim
 		self.encoder = nn.Sequential(
 			# size: batch x 3 x 32 x 32
 			#in_channels, out_channels, kernel_size, stride=1, padding=0, dilation=1, groups=1, bias=True
-			nn.Conv2d(3,16,3,stride=2,padding=1),
+			nn.Conv2d(3,c_hid,kernel_size=3,stride=2,padding=1),
 			nn.ReLU(True),
-			# size: batch x 8 x 16 x 16
-			nn.MaxPool2d(2,stride=2),
-			# size: batch x 8 x 8 x 8
-			nn.Conv2d(16,8,3,stride=1,padding=1),
-			nn.ReLU(True),
-			# size: batch x 8 x 8 x 8
-			nn.MaxPool2d(2,stride=2)
-			# size: batch x 8 x 4 x 4
+            nn.Conv2d(c_hid, c_hid, kernel_size=3, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(c_hid, 2*c_hid, kernel_size=3, padding=1, stride=2), # 16x16 => 8x8
+            nn.ReLU(True),
+            nn.Conv2d(2*c_hid, 2*c_hid, kernel_size=3, padding=1),
+            nn.ReLU(True),
+            nn.Conv2d(2*c_hid, 2*c_hid, kernel_size=3, padding=1, stride=2), # 8x8 => 4x4
+            nn.ReLU(True),
+            nn.Flatten(), # Image grid to single feature vector
+            nn.Linear(2*16*c_hid, latent_dim)
 		)
 		## convtranspose2d output size = (input_size-1)*stride - 2*padding + kernel_size + output_padding
 		## H_out ​= (H_in​−1)*stride[0] − 2×padding[0] + dilation[0]×(kernel_size[0]−1) + output_padding[0] + 1
-
-
+		self.linear = nn.Sequential(
+            nn.Linear(latent_dim, 2*16*c_hid),
+            nn.ReLU(True)
+        )
+		
 		self.decoder = nn.Sequential(
-			nn.ConvTranspose2d(8,16,3,stride=2),
+			nn.ConvTranspose2d(2*c_hid, 2*c_hid, kernel_size=3, output_padding=1, padding=1, stride=2), # 4x4 => 8x8
 			nn.ReLU(True),
-			# size: batch x 16 x 9 x 9
-			nn.ConvTranspose2d(16,8,5,stride=2,padding=2),
+			nn.Conv2d(2*c_hid, 2*c_hid, kernel_size=3, padding=1),
 			nn.ReLU(True),
-			# size: batch x 8 x 18 x 18
-			nn.ConvTranspose2d(8,3,2,stride=2,padding=1),
-			nn.Tanh()
-			# size: batch x 3 x 32 x 32
+			nn.ConvTranspose2d(2*c_hid, c_hid, kernel_size=3, output_padding=1, padding=1, stride=2), # 8x8 => 16x16
+			nn.ReLU(True),
+			nn.Conv2d(c_hid, c_hid, kernel_size=3, padding=1),
+			nn.ReLU(True),
+			nn.ConvTranspose2d(c_hid,3, kernel_size=3, output_padding=1, padding=1, stride=2), # 16x16 => 32x32
+			nn.Tanh() # The input images is scaled between -1 and 1, hence the output has to be bounded as well
 		)
-	def forward(self,x):
+
+	def forward(self, x, return_activations=False):
+		activations = {}
+		
+		def get_activation(name):
+			def hook(model, input, output):
+				activations[name] = output.detach()
+			return hook
+		
+		# Register hooks for each layer
+		handles = []
+		for name, layer in self.encoder.named_children():
+			handles.append(layer.register_forward_hook(get_activation(f'encoder_{name}')))
+		for name, layer in self.linear.named_children():
+			handles.append(layer.register_forward_hook(get_activation(f'linear_{name}')))
+		for name, layer in self.decoder.named_children():
+			handles.append(layer.register_forward_hook(get_activation(f'decoder_{name}')))
+		
+		# Forward pass
 		encoded = self.encoder(x)
-		decoded = self.decoder(encoded)
+		encoded_linear = self.linear(encoded)
+		encoded_linear = encoded_linear.reshape(encoded_linear.shape[0], -1, 4, 4)
+		decoded = self.decoder(encoded_linear)
+		
+		# Remove hooks
+		for handle in handles:
+			handle.remove()
+		
+		if return_activations:
+			return encoded, decoded, activations
 		return encoded, decoded
+		
+	def encode(self,x):
+		encoded = self.encoder(x)
+		return encoded
+	def decode(self,x):
+		decoded = self.decoder(x)
+		return decoded
+	def get_hyperparams(self):
+		params = {
+			'latent_dim': self.latent_dim
+		}
+		return params
 
 
 class VAE(nn.Module):
