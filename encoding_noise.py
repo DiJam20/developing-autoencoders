@@ -354,23 +354,45 @@ def plot_bar_comparison(sae_results, dae_results, neuron_groups, dataset):
     for start, end in zip(start_indices, neuron_groups):
         x_labels.append(f"{start}-{end}")
     
-    x = np.arange(len(neuron_groups))
-    width = 0.35
+    # Set up the figure with two subplots
+    plt.rc('font', size=20)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), dpi=300)
     
-    fig, ax = plt.figure(figsize=(12, 6))
+    # Plot SAE data on the left subplot
+    x_indices = np.arange(len(neuron_groups))
+    sae_bars = ax1.bar(x_indices, sae_means, color='#1a7adb', yerr=sae_stds, capsize=5)
+    ax1.set_xticks(x_indices)
+    ax1.set_xticklabels(x_labels)
+    ax1.set_ylabel('Reconstruction Loss')
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
     
-    sae_bars = ax.bar(x - width/2, sae_means, width, label='SAE', color='blue', alpha=1.0, yerr=sae_stds, capsize=5)
-    dae_bars = ax.bar(x + width/2, dae_means, width, label='DevAE', color='red', alpha=1.0, yerr=dae_stds, capsize=5)
+    # Plot DAE data on the right subplot
+    dae_bars = ax2.bar(x_indices, dae_means, color='#e82817', yerr=dae_stds, capsize=5)
+    ax2.set_xticks(x_indices)
+    ax2.set_xticklabels(x_labels)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax2.yaxis.set_visible(False)
+    ax2.set_ylabel('')
     
-    ax.set_xlabel('Manipulated Neuron Groups')
-    ax.set_ylabel('Reconstruction Loss')
-    ax.set_title(f'Reconstruction Loss Comparison by Neuron Group ({dataset.upper()})')
-    ax.set_xticks(x)
-    ax.set_xticklabels(x_labels)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.legend()
+    # Add legend
+    ax2.legend([sae_bars, dae_bars], ['AE', 'DevAE'], loc='upper right')
+    
+    # Set the same y-limit for both plots
+    max_val = max(
+        max(sae_means) + max(sae_stds),
+        max(dae_means) + max(dae_stds)
+    )
+    ax1.set_ylim(0, max_val * 1.1)
+    ax2.set_ylim(0, max_val * 1.1)
+    
+    # Add title
+    fig.suptitle(f'Reconstruction Loss Across Neuron Groups ({dataset.upper()})', fontsize=24)
+    
     plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
     plt.savefig(f'Results/bar_comparison_{dataset}.png', dpi=300, bbox_inches='tight')
     plt.close()
 
