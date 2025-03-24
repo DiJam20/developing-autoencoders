@@ -1,47 +1,156 @@
 import os
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.colors import BoundaryNorm, ListedColormap
 import seaborn as sns
 from tqdm import tqdm
 from sklearn.decomposition import PCA
+import torch
 
 from autoencoder import *
 from model_utils import *
 from solver import *
 
 
-def add_noise_and_reconstruct(test_images, noise_scale, n_components=32, start_noise_idx=0, end_noise_idx=4):
+def add_noise_and_reconstruct(test_images, noise_scale, dataset="mnist", n_components=None, start_noise_idx=0, end_noise_idx=4):
+    """
+    Add noise to specific principal components of the images and reconstruct.
+    
+    Args:
+        test_images: Test images
+        noise_scale: Scale of the noise to add
+        dataset: Dataset ('mnist' or 'cifar')
+        n_components: Number of PCA components (default: None, will be set based on dataset)
+        start_noise_idx: Start index of PCs to add noise to
+        end_noise_idx: End index of PCs to add noise to
+        
+    Returns:
+        Reconstructed images with noise added to specified PCs
+    """
+    # Set dataset-specific parameters
+    if dataset.lower() == "mnist":
+        if n_components is None:
+            n_components = 32
+        # For MNIST, images are already flat vectors
+        pca_input = test_images
+        reshape_shape = len(test_images), 784
+    elif dataset.lower() == "cifar":
+        if n_components is None:
+            n_components = 128
+        # For CIFAR, reshape from (N, 3, 32, 32) to (N, 3072)
+        pca_input = test_images.reshape(len(test_images), -1)
+        reshape_shape = len(test_images), 3, 32, 32
+    else:
+        raise ValueError(f"Unsupported dataset: {dataset}. Choose 'mnist' or 'cifar'.")
+    
     # Perform PCA
     pca = PCA(n_components=n_components)
-    pca_reduced = pca.fit_transform(test_images)
+    pca_reduced = pca.fit_transform(pca_input)
     
     # Add different noise to each PCA reduced image to specified PCs
     noise = np.random.normal(loc=0.0, scale=noise_scale, size=(len(pca_reduced), end_noise_idx-start_noise_idx))
     pca_reduced[:, start_noise_idx:end_noise_idx] += noise
     
     # Reconstruct
-    return pca.inverse_transform(pca_reduced).reshape(len(test_images), 784)
+    return pca.inverse_transform(pca_reduced).reshape(reshape_shape)
 
 
-def get_encoding_diff(model: NonLinearAutoencoder, original_img: torch.Tensor, noisy_img: torch.Tensor) -> np.ndarray:
+def add_zeroing_and_reconstruct(test_images, dataset="mnist", n_components=None, keep_start_idx=0, keep_end_idx=4):
+    """
+    Keep only one PC group and set all others to zero, then reconstruct.
+    
+    Args:
+        test_images: Test images
+        dataset: Dataset ('mnist' or 'cifar')
+        n_components: Number of PCA components (default: None, will be set based on dataset)
+        keep_start_idx: Start index of PCs to keep
+        keep_end_idx: End index of PCs to keep
+        
+    Returns:
+        Reconstructed images with only specified PCs kept
+    """
+    # Set dataset-specific parameters
+    if dataset.lower() == "mnist":
+        if n_components is None:
+            n_components = 32
+        # For MNIST, images are already flat vectors
+        pca_input = test_images
+        reshape_shape = len(test_images), 784
+    elif dataset.lower() == "cifar":
+        if n_components is None:
+            n_components = 128
+        # For CIFAR, reshape from (N, 3, 32, 32) to (N, 3072)
+        pca_input = test_images.reshape(len(test_images), -1)
+        reshape_shape = len(test_images), 3, 32, 32
+    else:
+        raise ValueError(f"Unsupported dataset: {dataset}. Choose 'mnist' or 'cifar'.")
+    
+    # Perform PCA
+    pca = PCA(n_components=n_components)
+    pca_reduced = pca.fit_transform(pca_input)
+    
+    pca_zeroed = np.zeros_like(pca_reduced)
+    
+    # Only keep the specified PC group
+    pca_zeroed[:, keep_start_idx:keep_end_idx] = pca_reduced[:, keep_start_idx:keep_end_idx]
+    
+    # Reconstruct
+    return pca.inverse_transform(pca_zeroed).reshape(reshape_shape)
+
+
+def get_encoding_diff(model, original_img, noisy_img, dataset="mnist") -> np.ndarray:
+    """
+    Get the difference in bottleneck activation between original and noisy images.
+    
+    Args:
+        model: The autoencoder model
+        original_img: Original image
+        noisy_img: Noisy image
+        dataset: Dataset ('mnist' or 'cifar')
+        
+    Returns:
+        Absolute difference in bottleneck activations
+    """
+    # Convert NumPy arrays to PyTorch tensors
+    if isinstance(original_img, np.ndarray):
+        original_img = torch.tensor(original_img, dtype=torch.float32)
+    if isinstance(noisy_img, np.ndarray):
+        noisy_img = torch.tensor(noisy_img, dtype=torch.float32)
+    
+    # Add batch dimension for CIFAR
+    if dataset.lower() == "cifar":
+        original_img = original_img.unsqueeze(0)
+        noisy_img = noisy_img.unsqueeze(0)
+    
     original_encoding = model.encode(original_img)
     noisy_encoding = model.encode(noisy_img)
     return np.abs((original_encoding - noisy_encoding).detach().numpy())
 
 
-def evaluate_models(test_images, reconstructed_images, sae, dae):
+def evaluate_models(test_images, reconstructed_images, sae, dae, dataset="mnist"):
+    """
+    Evaluate models by measuring encoding differences between original and noisy images.
+    
+    Args:
+        test_images: Original test images
+        reconstructed_images: Noisy reconstructed images
+        sae: SAE model
+        dae: DAE model
+        dataset: Dataset ('mnist' or 'cifar')
+        
+    Returns:
+        Tuple of mean SAE and DAE differences
+    """
     sae_diffs = []
     dae_diffs = []
     
     for i in range(len(test_images)):
         test_image = test_images[i]
-        reconstructed_image = torch.tensor(reconstructed_images[i], dtype=torch.float32)
+        reconstructed_image = reconstructed_images[i]
         
         with torch.no_grad():
-            sae_diff = get_encoding_diff(sae, test_image, reconstructed_image)
-            dae_diff = get_encoding_diff(dae, test_image, reconstructed_image)
+            sae_diff = get_encoding_diff(sae, test_image, reconstructed_image, dataset)
+            dae_diff = get_encoding_diff(dae, test_image, reconstructed_image, dataset)
 
             sae_diffs.append(sae_diff)
             dae_diffs.append(dae_diff)
@@ -49,7 +158,17 @@ def evaluate_models(test_images, reconstructed_images, sae, dae):
     return np.mean(np.vstack(sae_diffs), axis=0), np.mean(np.vstack(dae_diffs), axis=0)
 
 
-def plot_neuron_comparison(results, manipulated_neurons, savepath):
+def plot_neuron_comparison(results, manipulated_neurons, savepath, dataset="mnist", method="noise"):
+    """
+    Plot comparison of neuron responses to PC noise or zeroing.
+    
+    Args:
+        results: Results dictionary
+        manipulated_neurons: List of (start, end) PC ranges
+        savepath: Path to save the plot
+        dataset: Dataset ('mnist' or 'cifar')
+        method: Method used ('noise' or 'zeroing')
+    """
     plt.rcParams.update({'font.size': 16})
     
     plt.figure(figsize=(12, 8))
@@ -67,9 +186,15 @@ def plot_neuron_comparison(results, manipulated_neurons, savepath):
         dae_mean = np.mean(dae_data, axis=0)
         dae_std = np.std(dae_data, axis=0)
         
+        # Label depends on method
+        if method == "noise":
+            label_text = f"Noisy PCs: {manipulated_neurons[i][0]+1} - {manipulated_neurons[i][1]}"
+        else:  # zeroing
+            label_text = f"Kept PCs: {manipulated_neurons[i][0]+1} - {manipulated_neurons[i][1]}"
+        
         # Plot SAE
         plt.plot(sae_mean, color=sae_colors[i], 
-                label=f'SAE (Noisy PCs: {manipulated_neurons[i][0]} - {manipulated_neurons[i][1]-1})', 
+                label=f'SAE ({label_text})', 
                 linewidth=2)
         plt.fill_between(range(len(sae_mean)), 
                         sae_mean - sae_std, 
@@ -78,14 +203,15 @@ def plot_neuron_comparison(results, manipulated_neurons, savepath):
         
         # Plot DAE
         plt.plot(dae_mean, color=dae_colors[i], 
-                label=f'DAE (Noisy PCs: {manipulated_neurons[i][0]} - {manipulated_neurons[i][1]-1})', 
+                label=f'DAE ({label_text})', 
                 linewidth=2)
         plt.fill_between(range(len(dae_mean)),
                         dae_mean - dae_std,
                         dae_mean + dae_std,
                         color=dae_colors[i], alpha=0.1)
     
-    plt.title("PC Noise", fontsize=16, pad=20)
+    title_method = "PC Noise" if method == "noise" else "PC Zeroing"
+    plt.title(f"{dataset.upper()} {title_method}", fontsize=16, pad=20)
     plt.xlabel("Neuron Index", fontsize=16)
     plt.ylabel("Absolute Activation Difference", fontsize=16)
     
@@ -96,45 +222,133 @@ def plot_neuron_comparison(results, manipulated_neurons, savepath):
     
     plt.tick_params(axis='both', which='major', labelsize=16)
     plt.grid(True, alpha=0.3)
-
     
     plt.tight_layout()
     plt.savefig(savepath, dpi=300)
     plt.close()
 
 
-def compute_pc_noise_analysis(num_models, manipulated_neurons):
-    result_file = "Results/pc_noise.npy"
+def compute_pc_noise_analysis(num_models, manipulated_neurons, dataset="mnist", base_path="/home/david/"):
+    """
+    Compute PC noise analysis for all models.
+    
+    Args:
+        num_models: Number of models to evaluate
+        manipulated_neurons: List of (start, end) PC ranges
+        dataset: Dataset ('mnist' or 'cifar')
+        base_path: Base path to the model directory
+    """
+    result_file = f"Results/{dataset}_pc_noise.npy"
 
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
         print(f"Loading existing results from {result_file}")
-        return None
+        return np.load(result_file, allow_pickle=True).item()
     
-    test_images, _ = load_mnist_tensor()
+    # Load test images based on dataset
+    if dataset.lower() == "mnist":
+        test_images, _ = load_mnist_tensor()
+    else:
+        test_images, _ = load_cifar_list()
 
     results = {pair: [] for pair in manipulated_neurons}
 
     for neuron_pair in tqdm(manipulated_neurons, desc="Processing PC ranges", leave=False):
         # Generate noisy images
-        noisy_reconstructed = add_noise_and_reconstruct(test_images, noise_scale=10, start_noise_idx=neuron_pair[0], end_noise_idx=neuron_pair[1])
+        noisy_reconstructed = add_noise_and_reconstruct(
+            test_images, 
+            noise_scale=10,
+            dataset=dataset, 
+            start_noise_idx=neuron_pair[0], 
+            end_noise_idx=neuron_pair[1]
+        )
         
         for iteration in tqdm(range(num_models), desc=f"Testing models for PCs {neuron_pair}", leave=False):
-            modelpath = f'/home/david/mnist_model/'
-            sae = load_model(modelpath+'sae/'+str(iteration), 'sae', 59)
-            dae = load_model(modelpath+'dae/'+str(iteration), 'dae', 59)
+            # Load models based on dataset
+            if dataset.lower() == "mnist":
+                model_path = f'{base_path}mnist_models/'
+                sae = load_model(f"{model_path}sae/{iteration}", 'sae', 59)
+                dae = load_model(f"{model_path}dae/{iteration}", 'dae', 59)
+            else:
+                model_path = f"{base_path}cifar_models/"
+                sae = load_conv_model(f"{model_path}sae/{iteration}", 'sae', 59)
+                dae = load_conv_model(f"{model_path}dae/{iteration}", 'sae', 59, size_ls=[128]*60)
             
             # Evaluate models
-            sae_diffs, dae_diffs = evaluate_models(test_images, noisy_reconstructed, sae, dae)
+            sae_diffs, dae_diffs = evaluate_models(test_images, noisy_reconstructed, sae, dae, dataset)
             results[neuron_pair].append((sae_diffs, dae_diffs))
-
+    
     np.save(result_file, results)
+    return results
 
 
-def create_ranking_heatmaps(results, manipulated_neurons):
-    # First, get a sample to determine the number of neurons
+def compute_pc_zeroing_analysis(num_models, manipulated_neurons, dataset="mnist", base_path="/home/david/"):
+    """
+    Compute PC zeroing analysis for all models (keeping only specified PC groups).
+    
+    Args:
+        num_models: Number of models to evaluate
+        manipulated_neurons: List of (start, end) PC ranges
+        dataset: Dataset ('mnist' or 'cifar')
+        base_path: Base path to the model directory
+    """
+    result_file = f"Results/{dataset}_pc_zeroing.npy"
+
+    # Check if results already exist to avoid recomputation
+    if os.path.exists(result_file):
+        print(f"Loading existing results from {result_file}")
+        return np.load(result_file, allow_pickle=True).item()
+    
+    if dataset.lower() == "mnist":
+        test_images, _ = load_mnist_tensor()
+    else:
+        test_images, _ = load_cifar_list()
+
+    results = {pair: [] for pair in manipulated_neurons}
+
+    for neuron_pair in tqdm(manipulated_neurons, desc="Processing PC ranges", leave=False):
+        zeroed_reconstructed = add_zeroing_and_reconstruct(
+            test_images,
+            dataset=dataset, 
+            keep_start_idx=neuron_pair[0], 
+            keep_end_idx=neuron_pair[1]
+        )
+        
+        for iteration in tqdm(range(num_models), desc=f"Testing models for PCs {neuron_pair}", leave=False):
+            # Load models based on dataset
+            if dataset.lower() == "mnist":
+                model_path = f'{base_path}mnist_models/'
+                sae = load_model(f"{model_path}sae/{iteration}", 'sae', 59)
+                dae = load_model(f"{model_path}dae/{iteration}", 'dae', 59)
+            else:
+                model_path = f"{base_path}cifar_models/"
+                sae = load_conv_model(f"{model_path}sae/{iteration}", 'sae', 59)
+                dae = load_conv_model(f"{model_path}dae/{iteration}", 'sae', 59, size_ls=[128]*60)
+            
+            # Evaluate models
+            sae_diffs, dae_diffs = evaluate_models(test_images, zeroed_reconstructed, sae, dae, dataset)
+            results[neuron_pair].append((sae_diffs, dae_diffs))
+    
+    np.save(result_file, results)
+    return results
+
+
+def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", method="noise"):
+    """
+    Create heatmaps showing rankings of PC impact on neurons.
+    
+    Args:
+        results: Results dictionary
+        manipulated_neurons: List of (start, end) PC ranges
+        dataset: Dataset ('mnist' or 'cifar')
+        method: Method used ('noise' or 'zeroing')
+        
+    Returns:
+        Tuple of SAE and DAE rankings
+    """
+    # Sample to determine the number of neurons
     sample_data = next(iter(results.values()))[0]
-    num_neurons = len(sample_data[0])  # Length of SAE diffs for first run
+    num_neurons = len(sample_data[0])
     
     # Initialize arrays to store mean activation differences
     sae_activation_matrix = np.zeros((len(manipulated_neurons), num_neurons))
@@ -166,32 +380,48 @@ def create_ranking_heatmaps(results, manipulated_neurons):
         sae_neuron_diffs = sae_activation_matrix[:, neuron]
         dae_neuron_diffs = dae_activation_matrix[:, neuron]
         
+        if method != "noise":
+            # For zeros, higher activation difference is worse, so invert ranking
+            sae_neuron_diffs *= -1
+            dae_neuron_diffs *= -1
         # Calculate rankings using argsort and flipping so that 1 = highest activation difference
         sae_rankings[:, neuron] = np.argsort(np.argsort(-sae_neuron_diffs)) + 1
         dae_rankings[:, neuron] = np.argsort(np.argsort(-dae_neuron_diffs)) + 1
     
-    # Create labels for PC ranges
-    pc_labels = [f"({r[0]}-{r[1]-1})" for r in manipulated_neurons]
+    pc_labels = [f"({r[0]+1}-{r[1]})" for r in manipulated_neurons]
     
-    # Set up the figure
     plt.rcParams.update({'font.size': 14})
     
-    xtick_positions = [0, 15, 31]
-    xtick_labels = [1, 16, 32]
+    num_ranks = len(manipulated_neurons)
+    last_position = num_ranks - 1
+    middle_position = last_position // 2
+    xtick_positions = [0, middle_position, last_position]
+    xtick_labels = [0 + 1, middle_position + 1, last_position + 1]
+
+    if dataset.lower() == "mnist":
+        fig_size = (5, 3)
+        num_ranks = len(manipulated_neurons)
+        linewidths = 0.5
+    else:
+        fig_size = (5, 3)
+        num_ranks = len(manipulated_neurons)
+        linewidths = 0.1
     
-    blues = plt.cm.Blues_r(np.linspace(0, 1, 5))
+    blues = plt.cm.Blues_r(np.linspace(0, 1, num_ranks + 1))
     discrete_blues = ListedColormap(blues)
-    reds = plt.cm.Reds_r(np.linspace(0, 1, 5))
+    reds = plt.cm.Reds_r(np.linspace(0, 1, num_ranks + 1))
     discrete_reds = ListedColormap(reds)
     
-    bounds = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5]
-    norm = BoundaryNorm(bounds, 5)
+    bounds = [i + 0.5 for i in range(num_ranks + 1)]
+    norm = BoundaryNorm(bounds, num_ranks)
+    
+    method_str = "PC Noise Impact" if method == "noise" else "PC Zeroing Impact"
     
     # SAE Heatmap
-    plt.figure(figsize=(max(12, num_neurons*0.4), 3))
+    plt.figure(figsize=fig_size)
     
     ax = sns.heatmap(sae_rankings, annot=False, cmap=discrete_blues, 
-                cbar=True, square=True, linewidths=.5,
+                cbar=True, square=(dataset.lower() == "mnist"), linewidths=linewidths,
                 norm=norm,
                 xticklabels=range(1, num_neurons+1),
                 yticklabels=pc_labels)
@@ -200,23 +430,24 @@ def create_ranking_heatmaps(results, manipulated_neurons):
     ax.set_xticklabels(xtick_labels)
     
     cbar = ax.collections[0].colorbar
-    cbar.set_ticks([1, 2, 3, 4, 5])
-    cbar.set_ticklabels([1, 2, 3, 4, 5])
+    cbar.set_ticks(list(range(1, num_ranks + 1)))
+    cbar.set_ticklabels(list(range(1, num_ranks + 1)))
     cbar.minorticks_off()
     cbar.ax.invert_yaxis()
     
-    plt.title("SAE: PC Noise Impact Rankings", fontsize=16)
+    plt.title(f"{dataset.upper()} SAE: {method_str} Rankings", fontsize=16)
     plt.xlabel("Neuron Index", fontsize=14)
-    plt.ylabel("Manipulated PC Range", fontsize=14)
+    manipulation_type = "Manipulated" if method == "noise" else "Kept"
+    plt.ylabel(f"{manipulation_type} PC Range", fontsize=14)
     plt.tight_layout()
-    plt.savefig(f"Results/pc_noise_heatmap_sae_rankings.png", dpi=300)
+    plt.savefig(f"Results/figures/png/{dataset}_pc_{method}_heatmap_sae_rankings.png", dpi=300, bbox_inches='tight')
     plt.close()
     
     # DAE Heatmap
-    plt.figure(figsize=(max(12, num_neurons*0.4), 3))
+    plt.figure(figsize=fig_size)
     
     ax = sns.heatmap(dae_rankings, annot=False, cmap=discrete_reds, 
-                cbar=True, square=True, linewidths=.5,
+                cbar=True, square=(dataset.lower() == "mnist"), linewidths=linewidths,
                 norm=norm,
                 xticklabels=range(1, num_neurons+1),
                 yticklabels=pc_labels)
@@ -225,39 +456,101 @@ def create_ranking_heatmaps(results, manipulated_neurons):
     ax.set_xticklabels(xtick_labels)
     
     cbar = ax.collections[0].colorbar
-    cbar.set_ticks([1, 2, 3, 4, 5])
-    cbar.set_ticklabels([1, 2, 3, 4, 5])
+    cbar.set_ticks(list(range(1, num_ranks + 1)))
+    cbar.set_ticklabels(list(range(1, num_ranks + 1)))
     cbar.minorticks_off()
     cbar.ax.invert_yaxis()
     
-    plt.title("DAE: PC Noise Impact Rankings", fontsize=16)
+    plt.title(f"{dataset.upper()} DAE: {method_str} Rankings", fontsize=16)
     plt.xlabel("Neuron Index", fontsize=14)
     plt.ylabel("Manipulated PC Range", fontsize=14)
     plt.tight_layout()
-    plt.savefig(f"Results/pc_noise_heatmap_dae_rankings.png", dpi=300)
+    plt.savefig(f"Results/figures/png/{dataset}_pc_{method}_heatmap_dae_rankings.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"Results/figures/svg/{dataset}_pc_{method}_heatmap_dae_rankings.svg", bbox_inches='tight')
     plt.close()
     
     return sae_rankings, dae_rankings
 
 
-def analyze_and_visualize_pc_noise():
-    # Load the results
-    results_file = "Results/pc_noise.npy"
-    results = np.load(results_file, allow_pickle=True).item()
+def analyze_and_visualize_pc_noise(dataset, manipulated_neurons):
+    """
+    Analyze and visualize PC noise results.
     
-    manipulated_neurons = [(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)]
-    
-    sae_rankings, dae_rankings = create_ranking_heatmaps(results, manipulated_neurons)
+    Args:
+        dataset: Dataset ('mnist' or 'cifar')
         
+    Returns:
+        Tuple of SAE and DAE rankings
+    """
+    # Load the results
+    results_file = f"Results/{dataset}_pc_noise.npy"
+    results = np.load(results_file, allow_pickle=True).item()
+
+    sae_rankings, dae_rankings = create_ranking_heatmaps(results, manipulated_neurons, dataset, method="noise")
+    
     return sae_rankings, dae_rankings
 
 
-def run_pc_noise_analysis(num_models):
-    manipulated_neurons = [(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)]
+def analyze_and_visualize_pc_zeroing(dataset, manipulated_neurons):
+    """
+    Analyze and visualize PC zeroing results.
+    
+    Args:
+        dataset: Dataset ('mnist' or 'cifar')
+        
+    Returns:
+        Tuple of SAE and DAE rankings
+    """
+    # Load the results
+    results_file = f"Results/{dataset}_pc_zeroing.npy"
+    results = np.load(results_file, allow_pickle=True).item()
 
-    compute_pc_noise_analysis(num_models, manipulated_neurons)
-    results = np.load("Results/pc_noise.npy", allow_pickle=True).item()
+    sae_rankings, dae_rankings = create_ranking_heatmaps(results, manipulated_neurons, dataset, method="zeroing")
+    
+    return sae_rankings, dae_rankings
 
-    plot_neuron_comparison(results, manipulated_neurons, "Results/pc_noise.png")
 
-    analyze_and_visualize_pc_noise()
+def run_pc_noise_analysis(num_models, dataset, base_path, manipulated_neurons):
+    """
+    Run the complete PC noise analysis.
+    
+    Args:
+        num_models: Number of models to evaluate
+        dataset: Dataset used for training ('mnist' or 'cifar')
+        base_path: Base path to the model directory
+    """
+    compute_pc_noise_analysis(num_models, manipulated_neurons, dataset, base_path)
+    results = np.load(f"Results/{dataset}_pc_noise.npy", allow_pickle=True).item()
+    plot_neuron_comparison(results, manipulated_neurons, f"Results/figures/png/{dataset}_pc_noise.png", dataset, method="noise")
+    analyze_and_visualize_pc_noise(dataset, manipulated_neurons)
+
+
+def run_pc_zeroing_analysis(num_models, dataset, base_path, manipulated_neurons):
+    """
+    Run the complete PC zeroing analysis.
+    
+    Args:
+        num_models: Number of models to evaluate
+        dataset: Dataset used for training ('mnist' or 'cifar')
+        base_path: Base path to the model directory
+    """
+    compute_pc_zeroing_analysis(num_models, manipulated_neurons, dataset, base_path)
+    results = np.load(f"Results/{dataset}_pc_zeroing.npy", allow_pickle=True).item()
+    plot_neuron_comparison(results, manipulated_neurons, f"Results/figures/png/{dataset}_pc_zeroing.png", dataset, method="zeroing")
+    analyze_and_visualize_pc_zeroing(dataset, manipulated_neurons)
+
+
+def run_all_pc_analyses(num_models, dataset, base_path, manipulated_neurons):
+    """
+    Run both noise and zeroing PC analyses.
+    
+    Args:
+        num_models: Number of models to evaluate
+        dataset: Dataset used for training ('mnist' or 'cifar')
+        base_path: Base path to the model directory
+    """
+    print(f"Running PC noise analysis for {dataset}...")
+    run_pc_noise_analysis(num_models, dataset, base_path, manipulated_neurons)
+    
+    print(f"Running PC zeroing analysis for {dataset}...")
+    run_pc_zeroing_analysis(num_models, dataset, base_path, manipulated_neurons)
