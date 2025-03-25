@@ -2,23 +2,75 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
-
 from model_utils import *
 
-def twonn_dimension(activations):    
-    # Find 3 nearest neighbors (point itself + 2 neighbors)
-    nbrs = NearestNeighbors(n_neighbors=3).fit(activations)
-    distances, _ = nbrs.kneighbors(activations)
+#Author: Francesco Mottes
+#Date  : 15-Oct-2019
+#-----------------------------
+def twonn_dimension(data, return_xy=False):
+    """
+    Calculates intrinsic dimension of the provided data points with the TWO-NN algorithm.
+    -----------
+    Parameters:
+    data : 2d array-like
+        2d data matrix. Samples on rows and features on columns.
+    return_xy : bool (default=False)
+        Whether to return also the coordinate vectors used for the linear fit.
+    -----------
+    Returns:
+    d : int
+        Intrinsic dimension of the dataset according to TWO-NN.
+    x : 1d array (optional)
+        Array with the -log(mu) values.
+    y : 1d array (optional)
+        Array with the -log(F(mu_{sigma(i)})) values.
+    -----------
+    References:
+    [1] E. Facco, M. d’Errico, A. Rodriguez & A. Laio
+        Estimating the intrinsic dimension of datasets by a minimal neighborhood information
+        (https://doi.org/10.1038/s41598-017-11873-y)
+    """
+    data = np.array(data)
+    N = len(data)
     
-    # Get ratios of distances to 1st and 2nd neighbors
-    r1 = distances[:, 1]
-    r2 = distances[:, 2]
-    mu = r2 / r1
+    #mu = r2/r1 for each data point
+    mu = []
+    for i,x in enumerate(data):
+        
+        dist = np.sort(np.sqrt(np.sum((x-data)**2, axis=1)))
+        r1, r2 = dist[dist>0][:2]
 
-    dimensionality = 1.0 / np.mean(np.log(mu))
-    return dimensionality
+        mu.append((i+1,r2/r1))
+        
+
+    #permutation function
+    sigma_i = dict(zip(range(1,len(mu)+1), np.array(sorted(mu, key=lambda x: x[1]))[:,0].astype(int)))
+
+    mu = dict(mu)
+
+    #cdf F(mu_{sigma(i)})
+    F_i = {}
+    for i in mu:
+        F_i[sigma_i[i]] = i/N
+
+    #fitting coordinates
+    x = np.log([mu[i] for i in sorted(mu.keys())])
+    y = np.array([1-F_i[i] for i in sorted(mu.keys())])
+
+    #avoid having log(0)
+    x = x[y>0]
+    y = y[y>0]
+
+    y = -1*np.log(y)
+
+    #fit line through origin to get the dimension
+    d = np.linalg.lstsq(np.vstack([x, np.zeros(len(x))]).T, y, rcond=None)[0][0]
+        
+    if return_xy:
+        return d, x, y
+    else: 
+        return d
     
 
 def participation_ratio(activation_matrix):
@@ -34,6 +86,7 @@ def participation_ratio(activation_matrix):
         dimensionality = 0
         
     return dimensionality
+
 
 def calculate_dimensionality_for_single_model(model_idx, model_type, test_images, dataset, size_ls, num_epochs, base_path):
     if dataset.lower() == 'mnist':
@@ -145,29 +198,3 @@ def run_dimensionality_analysis(dataset, size_ls, num_models, num_epochs, base_p
     plot_dimensionality_comparison(dataset)
     
     print(f"Dimensionality analysis for {dataset} complete.")
-
-
-mnist_size_ls = [4, 4, 4, 4, 4, 10,
-        10, 10, 10, 10, 16, 16,
-        16, 16, 16, 16, 16, 24,
-        24, 24, 24, 24, 24, 24, 
-        32, 32, 32, 32, 32, 32,
-        32, 32, 32, 32, 32, 32, 
-        32, 32, 32, 32, 32, 32, 
-        32, 32, 32, 32, 32, 32, 
-        32, 32, 32, 32, 32, 32,
-        32, 32, 32, 32, 32, 32,]
-
-cifar_size_ls = [6,   6,   6,   6,   6,   6,    # 6
-                10,  10,  10,  10,  10,  10,    # 6
-                16,  16,  16,  16,  16,  16,    # 6
-                28,  28,  28,  28,  28,  28,    # 6
-                48,  48,  48,  48,  48,  48,  48,  48, 48, # 9
-                90,  90,  90,  90,  90,  90,  90,  90,  90,  90, #10
-                128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-                128, 128, 128, 128, 128, 128, 128 # 17
-                ]
-
-base_path = '/home/david/'
-run_dimensionality_analysis('mnist', mnist_size_ls, num_models=5, num_epochs=30, base_path=base_path)
-# run_dimensionality_analysis('cifar', cifar_size_ls, num_models=2, num_epochs=60, base_path=base_path)

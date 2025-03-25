@@ -392,19 +392,17 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
     
     plt.rcParams.update({'font.size': 14})
     
+    max_neurons = len(manipulated_neurons)
+    mid_position = max_neurons // 2
+    xtick_positions = [0, mid_position, max_neurons - 1]
+    xtick_labels = [1, mid_position + 1, max_neurons]
     num_ranks = len(manipulated_neurons)
-    last_position = num_ranks - 1
-    middle_position = last_position // 2
-    xtick_positions = [0, middle_position, last_position]
-    xtick_labels = [0 + 1, middle_position + 1, last_position + 1]
 
     if dataset.lower() == "mnist":
         fig_size = (5, 3)
-        num_ranks = len(manipulated_neurons)
         linewidths = 0.5
     else:
         fig_size = (5, 3)
-        num_ranks = len(manipulated_neurons)
         linewidths = 0.1
     
     blues = plt.cm.Blues_r(np.linspace(0, 1, num_ranks + 1))

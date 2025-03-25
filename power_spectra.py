@@ -7,7 +7,7 @@ from autoencoder import *
 from model_utils import *
 from solver import *
 
-
+# Author: Deyue Kong
 def z_score(image: np.ndarray) -> np.ndarray:
     """
     Normalize an image using the z-score normalization.
@@ -26,6 +26,7 @@ def z_score(image: np.ndarray) -> np.ndarray:
     return normalized_image
 
 
+# Author: Deyue Kong
 def radial_profile(data: np.ndarray, center: np.ndarray = None) -> np.ndarray:
     """
     Compute the radial profile of a 2D array data.
@@ -53,6 +54,7 @@ def radial_profile(data: np.ndarray, center: np.ndarray = None) -> np.ndarray:
     return radialprofile
 
 
+# Author: Deyue Kong
 def power_spectrum_radial_average(image: np.ndarray) -> np.ndarray:
     """
     Calculate the radial average of the power spectrum for a 2D grey-scale image.
@@ -87,6 +89,7 @@ def rgb_to_grayscale(images):
         Batch of grayscale images.
     """
     # Standard luminance formula: 0.299 * R + 0.587 * G + 0.114 * B
+    # Source: https://www.w3.org/TR/AERT/#color-contrast
     grayscale = 0.299 * images[:, :, :, 0:1, :] + \
                 0.587 * images[:, :, :, 1:2, :] + \
                 0.114 * images[:, :, :, 2:3, :]
@@ -112,8 +115,6 @@ def load_rfs(save_path_sae: str, save_path_dae:str, num_models: int, epoch: int)
     sae_power_spectra = []
     dae_power_spectra = []
 
-    print(dae_rfs.shape)
-
     MIN_WIDTH = 28
     MIN_HEIGHT = 28
 
@@ -122,8 +123,6 @@ def load_rfs(save_path_sae: str, save_path_dae:str, num_models: int, epoch: int)
         dae_rfs = rgb_to_grayscale(dae_rfs)
         MIN_WIDTH = 32
         MIN_HEIGHT = 32
-
-    print(sae_rfs.shape)
 
     for i in tqdm(range(num_models)):
         sae_power_spectrum = []
@@ -159,14 +158,12 @@ def group_power_spectra(power_spectra, neuron_groups):
     
     start_idx = 0
     for end_idx in neuron_groups:
-        # Ensure we don't exceed the number of available neurons
         end_idx = min(end_idx, power_spectra.shape[0])
         
-        # Calculate the average power spectrum for this group
+        # Calculate average power spectrum for one group
         group_avg = np.mean(power_spectra[start_idx:end_idx], axis=0)
         grouped_spectra.append(group_avg)
         
-        # Create a label for this group
         group_label = f"{start_idx+1}-{end_idx}"
         group_labels.append(group_label)
         
@@ -239,8 +236,9 @@ def save_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups=None)
     plt.rcParams['font.size'] = 16
     fig, axs = plt.subplots(1, 2, figsize=(12, 5), dpi=300)
     
-    sae_mean = np.mean(sae_power_spectra, axis=0)  # Average across models
-    dae_mean = np.mean(dae_power_spectra, axis=0)  # Average across models
+    # Average across models
+    sae_mean = np.mean(sae_power_spectra, axis=0)
+    dae_mean = np.mean(dae_power_spectra, axis=0)
     
     if neuron_groups:
         # Group the neurons and plot the average for each group
@@ -255,7 +253,8 @@ def save_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups=None)
         plot_power_spectra_subplot(axs[1], dae_mean, 'DAE RF Power Spectrum')
 
     plt.tight_layout()
-    plt.savefig('Results/combined_power_spectrum.png', bbox_inches='tight', dpi=300)
+    plt.savefig('Results/figures/png/combined_power_spectrum.png', bbox_inches='tight', dpi=300)
+    plt.savefig('Results/figures/svg/combined_power_spectrum.svg', bbox_inches='tight')
     plt.close()
 
 

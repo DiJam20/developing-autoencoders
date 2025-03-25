@@ -23,10 +23,11 @@ def load_mnist():
     test_loader = DataLoader(mnist_test, batch_size=batch_size, shuffle=False, num_workers=6)
     return train_loader, validation_loader, test_loader
 
+
 def load_cifar():
     transform = transforms.Compose([
         transforms.ToTensor(),  
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
     ])
 
     cifar_train = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
@@ -85,6 +86,65 @@ def load_cifar_tensor():
     tensor_test_images = torch.stack(tensor_test_images)
 
     return tensor_test_images, test_labels
+
+
+def load_mnist_list():
+    """
+    Load MNIST test data and normalise it.
+
+    Returns:
+        np.array: List of MNIST images
+        np.array: List of MNIST labels
+    """
+    transform = transforms.Compose([
+        transforms.ToTensor(),  
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
+
+    mnist_test = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
+    test_loader = DataLoader(mnist_test, batch_size=128, shuffle=False, num_workers=6)
+
+    test_images = []
+    test_labels = []
+
+    for batch_idx, (data, target) in enumerate(test_loader):
+        test_images.append(data)
+        test_labels.append(target)
+
+    test_images = np.concatenate(test_images)
+    test_labels = np.concatenate(test_labels)
+    test_images = test_images.squeeze(1)
+
+    return test_images, test_labels
+
+
+def load_cifar_list():
+    """
+    Load CIFAR10 test data and normalise it.
+
+    Returns:
+        np.array: List of CIFAR10 images
+        np.array: List of CIFAR10 labels
+    """
+    transform = transforms.Compose([
+        transforms.ToTensor(),  
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))
+    ])
+
+    cifar_test = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+    test_loader = DataLoader(cifar_test, batch_size=128, shuffle=False, num_workers=6)
+
+    test_images = []
+    test_labels = []
+
+    for batch_idx, (data, target) in enumerate(test_loader):
+        test_images.append(data)
+        test_labels.append(target)
+
+    test_images = np.concatenate(test_images)
+    test_labels = np.concatenate(test_labels)
+
+    return test_images, test_labels
 
 
 def load_model(model_path, model_type, epoch, size_ls=None):
@@ -149,6 +209,11 @@ def cosine_angle_between_vectors(vec_a, vec_b):
     Returns:
         angle: Angle between the two vectors in degrees, normalized to be between 0 and 90 degrees
     """
+    # check if vectors have more than one dimension
+    if vec_a.ndim > 1:
+        vec_a = vec_a.flatten()
+    if vec_b.ndim > 1:
+        vec_b = vec_b.flatten()
     numerator = np.dot(vec_a, vec_b)
     denominator = np.linalg.norm(vec_a) * np.linalg.norm(vec_b)
     if denominator == 0:
@@ -156,3 +221,43 @@ def cosine_angle_between_vectors(vec_a, vec_b):
     cos_value = np.clip(numerator / denominator, -1.0, 1.0)
     angle = np.arccos(cos_value) * 180 / np.pi
     return min(angle, 180 - angle)
+
+
+def draw_circle(shape, diameter):
+    assert len(shape) == 2
+    TF = np.zeros(shape,dtype=np.bool)
+    center = np.array(TF.shape)/2.0
+
+    for iy in range(shape[0]):
+        for ix in range(shape[1]):
+            TF[iy,ix] = (iy- center[0])**2 + (ix - center[1])**2 < diameter **2
+    return(TF)
+
+
+def filter_circle(circle_mask, full_fft_filter):
+    temp = np.zeros(full_fft_filter.shape,dtype=complex)
+    temp[circle_mask] = full_fft_filter[circle_mask]
+    return(temp)
+
+
+def add_frequency_noise(image, noise_level=1, inner_diameter=3, outer_diameter=7):
+    # Ensure image is 2D
+    if len(image.shape) > 2:
+        if image.shape[0] == 1:  # Single channel
+            image = image.squeeze(0)
+        elif image.shape[0] == 3:  # RGB
+            # Use grayscale conversion if RGB
+            image = 0.299 * image[0] + 0.587 * image[1] + 0.114 * image[2]
+    
+    circle_mask = draw_circle(shape=image.shape,diameter=inner_diameter)
+    outer_circle_mask = draw_circle(shape=image.shape, diameter=outer_diameter)
+    ring_mask = outer_circle_mask & ~circle_mask
+
+    noise = np.random.randn(*image.shape)
+    noise_fft = np.fft.fftshift(np.fft.fft2(noise))
+    noise_fft_ring = noise_fft * ring_mask * noise_level
+    frequency_noise = np.fft.ifft2(np.fft.ifftshift(noise_fft_ring))
+
+    img = image + np.real(frequency_noise)
+
+    return img
