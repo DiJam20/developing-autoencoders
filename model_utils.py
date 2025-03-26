@@ -257,7 +257,13 @@ def add_frequency_noise(image, noise_level=1, inner_diameter=3, outer_diameter=7
     noise_fft = np.fft.fftshift(np.fft.fft2(noise))
     noise_fft_ring = noise_fft * ring_mask * noise_level
     frequency_noise = np.fft.ifft2(np.fft.ifftshift(noise_fft_ring))
+    frequency_noise = np.real(frequency_noise)
 
-    img = image + np.real(frequency_noise)
+    # Normalize noise to match the magnitude to the noise level
+    noise_magnitude = np.sqrt(np.mean(frequency_noise**2))
+    noise_scale = noise_level / noise_magnitude
+    frequency_noise = frequency_noise * noise_scale
 
-    return img
+    img = image + frequency_noise
+
+    return img, noise_scale
