@@ -17,7 +17,6 @@ def encode_dataset(model, dataset_images, dataset="mnist"):
     Args:
         model: Trained autoencoder model
         dataset_images: Images from the dataset
-        dataset_labels: Labels from the dataset (needed for LogisticRegression)
         dataset: Dataset name ('mnist' or 'cifar')
         
     Returns:
@@ -223,6 +222,7 @@ def run_classification_importance_analysis(num_models, base_path="/home/david/",
         num_models: Number of models to evaluate
         base_path: Base path to the model directory
         dataset: Dataset name ('mnist or 'cifar')
+        size_ls: List of bottleneck sizes
     """
 
     print(f"Running analysis for {dataset}...")
