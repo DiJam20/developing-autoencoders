@@ -99,7 +99,7 @@ def evaluate_single_model(model, test_images, neuron_groups, dataset):
     return group_losses
 
 
-def evaluate_models_with_averaging(num_models, test_images, neuron_groups, dataset):
+def evaluate_models_with_averaging(num_models, test_images, neuron_groups, dataset, base_path):
     """
     Evaluate multiple models and average the results.
     
@@ -123,8 +123,8 @@ def evaluate_models_with_averaging(num_models, test_images, neuron_groups, datas
     dae_results = []
 
     for iteration in tqdm(range(num_models), desc="Processing models", leave=False):
-        modelpath = f'/home/david/{dataset}_model/'
-        epoch = len(np.load(f'/home/david/{dataset}_model/dae/size_each_epoch.npy')) - 1
+        modelpath = f'{base_path}{dataset}_model/'
+        epoch = len(np.load(f'{modelpath}dae/size_each_epoch.npy')) - 1
         if dataset == 'mnist':
             sae = load_model(modelpath+'sae/'+str(iteration), 'sae', epoch)
             dae = load_model(modelpath+'dae/'+str(iteration), 'dae', 59)
@@ -177,20 +177,20 @@ def plot_heatmap(sae_results, dae_results, neuron_groups, dataset):
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 5))
     
-    # SAE heatmap with blues
+    # SAE heatmap
     sns.heatmap(sae_means.reshape(1, -1), annot=False, cmap=blues,
-               xticklabels=x_labels, yticklabels=["SAE"], ax=ax1, 
+               xticklabels=x_labels, yticklabels=["AE"], ax=ax1, 
                vmin=vmin, vmax=vmax,
                cbar_kws={"label": "Reconstruction Loss"})
-    ax1.set_title('SAE Reconstruction Loss')
+    ax1.set_title('AE Reconstruction Loss')
     ax1.set_xlabel('')
     
-    # DAE heatmap with reds
+    # DAE heatmap
     sns.heatmap(dae_means.reshape(1, -1), annot=False, cmap=reds,
                xticklabels=x_labels, yticklabels=["DevAE"], ax=ax2, 
                vmin=vmin, vmax=vmax,
                cbar_kws={"label": "Reconstruction Loss"})
-    ax2.set_title('DAE Reconstruction Loss')
+    ax2.set_title('DevAE Reconstruction Loss')
     ax2.set_xlabel('Manipulated Neuron Groups')
     
     plt.tight_layout()
@@ -201,7 +201,7 @@ def plot_heatmap(sae_results, dae_results, neuron_groups, dataset):
     return None
 
 
-def collect_noisy_images(image, neuron_groups, dataset):
+def collect_noisy_images(image, neuron_groups, dataset, base_path):
     """
     Collect noisy images and their loss values for both SAE and DAE models.
     
@@ -217,7 +217,7 @@ def collect_noisy_images(image, neuron_groups, dataset):
     start_indices = [0] + [neuron_groups[i-1] for i in range(1, num_groups)]
     group_sizes = [neuron_groups[i] - start_indices[i] for i in range(num_groups)]
 
-    modelpath = f'/home/david/{dataset}_model'
+    modelpath = f'{base_path}{dataset}_models'
     if dataset == 'mnist':
         sae = load_model(f'{modelpath}/sae/0', 'sae', 59)
         dae = load_model(f'{modelpath}/dae/0', 'dae', 59)
@@ -258,7 +258,6 @@ def plot_noisy_images(sae_noisy_images, dae_noisy_images, sae_losses, dae_losses
     """
     num_groups = len(neuron_groups)
     
-    # Set up the grid plot
     fig, axes = plt.subplots(2, num_groups, figsize=(num_groups * 2.5, 5))
     
     # Calculate start indices for each neuron group
@@ -297,14 +296,12 @@ def plot_noisy_images(sae_noisy_images, dae_noisy_images, sae_losses, dae_losses
             dae_img = dae_decoded.reshape(28, 28).detach().numpy()
             axes[1, group_idx].imshow(dae_img, cmap='gray', vmin=-1, vmax=3)
                 
-        # Add loss text to SAE image
+        # Add loss labels
         axes[0, group_idx].text(0.5, 0.95, f"Loss: {sae_loss:.4f}", 
                                size=8, ha="center", va="top", 
                                color='white', 
                                bbox=dict(boxstyle="round,pad=0.2", fc="black", alpha=0.7),
                                transform=axes[0, group_idx].transAxes)
-        
-        # Add loss text to DAE image
         axes[1, group_idx].text(0.5, 0.95, f"Loss: {dae_loss:.4f}", 
                                size=8, ha="center", va="top", 
                                color='white', 
@@ -324,7 +321,8 @@ def plot_noisy_images(sae_noisy_images, dae_noisy_images, sae_losses, dae_losses
     
     plt.tight_layout()
     plt.subplots_adjust(wspace=0.05, hspace=0.05)
-    plt.savefig(f'Results/noisy_images_{dataset}.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'Results/figures/png/noisy_images_{dataset}.png', dpi=300, bbox_inches='tight')
+    plt.savefig(f'Results/figures/svg/noisy_images_{dataset}.svg', bbox_inches='tight')
     plt.close()
 
 
@@ -354,11 +352,10 @@ def plot_bar_comparison(sae_results, dae_results, neuron_groups, dataset):
     for start, end in zip(start_indices, neuron_groups):
         x_labels.append(f"{start}-{end}")
     
-    # Set up the figure with two subplots
     plt.rc('font', size=20)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), dpi=300)
     
-    # Plot SAE data on the left subplot
+    # Plot SAE
     x_indices = np.arange(len(neuron_groups))
     sae_bars = ax1.bar(x_indices, sae_means, color='#1a7adb', yerr=sae_stds, capsize=5)
     ax1.set_xticks(x_indices)
@@ -367,7 +364,7 @@ def plot_bar_comparison(sae_results, dae_results, neuron_groups, dataset):
     ax1.spines['top'].set_visible(False)
     ax1.spines['right'].set_visible(False)
     
-    # Plot DAE data on the right subplot
+    # Plot DAE
     dae_bars = ax2.bar(x_indices, dae_means, color='#e82817', yerr=dae_stds, capsize=5)
     ax2.set_xticks(x_indices)
     ax2.set_xticklabels(x_labels)
@@ -376,8 +373,7 @@ def plot_bar_comparison(sae_results, dae_results, neuron_groups, dataset):
     ax2.spines['left'].set_visible(False)
     ax2.yaxis.set_visible(False)
     ax2.set_ylabel('')
-    
-    # Add legend
+
     ax2.legend([sae_bars, dae_bars], ['AE', 'DevAE'], loc='upper right')
     
     # Set the same y-limit for both plots
@@ -388,7 +384,6 @@ def plot_bar_comparison(sae_results, dae_results, neuron_groups, dataset):
     ax1.set_ylim(0, max_val * 1.1)
     ax2.set_ylim(0, max_val * 1.1)
     
-    # Add title
     fig.suptitle(f'Reconstruction Loss Across Neuron Groups ({dataset.upper()})', fontsize=24)
     
     plt.tight_layout()
@@ -397,7 +392,7 @@ def plot_bar_comparison(sae_results, dae_results, neuron_groups, dataset):
     plt.close()
 
 
-def run_encoding_noise_analysis(num_models, neuron_groups = [4, 10, 16, 24, 32], dataset='mnist'):
+def run_encoding_noise_analysis(num_models, size_ls, dataset='mnist', base_path='/home/david/'):
     """
     Run the encoding noise analysis for SAE and DAE models.
     """
@@ -405,8 +400,10 @@ def run_encoding_noise_analysis(num_models, neuron_groups = [4, 10, 16, 24, 32],
         test_images, _ = load_mnist_tensor()
     else:
         test_images, _ = load_cifar_tensor()
+
+    neuron_groups = sorted(set(size_ls))
     
-    evaluate_models_with_averaging(num_models, test_images, neuron_groups, dataset)
+    evaluate_models_with_averaging(num_models, test_images, neuron_groups, dataset, base_path)
 
     sae_results, dae_results = np.load(f"Results/encoding_noise_{dataset}.npy")
         
@@ -415,5 +412,10 @@ def run_encoding_noise_analysis(num_models, neuron_groups = [4, 10, 16, 24, 32],
     plot_bar_comparison(sae_results, dae_results, neuron_groups, dataset)
     
     # Collect and plot example noisy images
-    sae_noisy_images, dae_noisy_images, sae_losses, dae_losses = collect_noisy_images(test_images[9], neuron_groups, dataset)
+    if dataset == 'mnist':
+        test_image = test_images[0]
+    else:
+        test_image = test_images[9]
+    
+    sae_noisy_images, dae_noisy_images, sae_losses, dae_losses = collect_noisy_images(test_image, neuron_groups, dataset, base_path)
     plot_noisy_images(sae_noisy_images, dae_noisy_images, sae_losses, dae_losses, neuron_groups, dataset)
