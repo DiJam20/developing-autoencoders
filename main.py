@@ -9,8 +9,10 @@ from power_spectra import plot_power_spectra
 from pc_noise import *
 from bottleneck_activation import run_bottleneck_activation_analysis
 from encoding_noise import run_encoding_noise_analysis
-from classification_accuracy import run_all_classification_analyses
+from importance_for_classification import run_classification_importance_analysis
 from dimensionality_development import run_dimensionality_analysis
+from frequency_noise import run_all_frequency_analyses
+from reconstruction_examples import create_reconstruction_examples
 
 def main():
     base_path = '/home/david/'
@@ -73,8 +75,8 @@ def main():
     # run_bottleneck_activation_analysis(10, 'cifar', base_path)
 
 
-    # run_encoding_noise_analysis(2, [4, 10, 16, 24, 32], 'mnist')
-    # run_encoding_noise_analysis(5, [6, 10, 16, 28, 48, 90, 128], 'cifar')
+    # run_encoding_noise_analysis(10, mnist_size_ls, 'mnist', '/home/david/')
+    # run_encoding_noise_analysis(1, cifar_size_ls, 'cifar', '/home/david/')
 
     mnist_manipulated_neurons = [(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)]
     cifar_manipulated_neurons = [(0, 6), (6, 10), (10, 16), (16, 28), (28, 48), (48, 90), (90, 128)]
@@ -82,10 +84,15 @@ def main():
     # run_all_pc_analyses(40, "mnist", base_path, manipulated_neurons=mnist_manipulated)
     # run_all_pc_analyses(10, "cifar", base_path, manipulated_neurons=cifar_manipulated)
 
-    # run_all_classification_analyses(1)
-
     # run_dimensionality_analysis('mnist', mnist_size_ls, num_models=2, num_epochs=30, base_path=base_path)
     # run_dimensionality_analysis('cifar', cifar_size_ls, num_models=2, num_epochs=60, base_path=base_path)
+
+    # run_classification_importance_analysis(40, dataset="mnist", size_ls=mnist_size_ls)
+    # run_classification_importance_analysis(10, dataset="cifar", size_ls=cifar_size_ls)
+
+    run_all_frequency_analyses(40, 10, base_path)
+
+    create_reconstruction_examples(base_path)
 
 if __name__ == "__main__":
     main()

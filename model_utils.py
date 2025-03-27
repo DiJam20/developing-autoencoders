@@ -182,7 +182,16 @@ def load_model(model_path, model_type, epoch, size_ls=None):
 
 def load_conv_model(model_path, model_type, epoch, size_ls=None):
     if size_ls is None:
-        size_ls = [128]
+        size_ls = [6, 6, 6, 6, 6, 6, 
+                10, 10, 10, 10, 10, 10,
+                16, 16, 16, 16, 16, 16,
+                28, 28, 28, 28, 28, 28,
+                48, 48, 48, 48, 48, 48, 48, 48, 48,
+                90, 90, 90, 90, 90, 90, 90, 90, 90, 90,
+                128, 128, 128, 128, 128, 128, 128, 128, 
+                128, 128, 128, 128, 128, 128, 128, 128, 128
+                ]
+    
     if model_type == "sae":
         model = ConvAutoencoder(latent_dim=size_ls[-1])
     else:
@@ -222,18 +231,21 @@ def cosine_angle_between_vectors(vec_a, vec_b):
     angle = np.arccos(cos_value) * 180 / np.pi
     return min(angle, 180 - angle)
 
-
+# Source: https://fairyonice.github.io/Low-and-High-pass-filtering-experiments.html
+# Yumi Kondo, 22.09.2018
 def draw_circle(shape, diameter):
     assert len(shape) == 2
-    TF = np.zeros(shape,dtype=np.bool)
-    center = np.array(TF.shape)/2.0
+    circle_mask = np.zeros(shape,dtype=np.bool)
+    center = np.array(circle_mask.shape)/2.0
 
     for iy in range(shape[0]):
         for ix in range(shape[1]):
-            TF[iy,ix] = (iy- center[0])**2 + (ix - center[1])**2 < diameter **2
-    return(TF)
+            circle_mask[iy,ix] = (iy - center[0])**2 + (ix - center[1])**2 < diameter**2
+    return circle_mask
 
 
+# Source: https://fairyonice.github.io/Low-and-High-pass-filtering-experiments.html
+# Yumi Kondo, 22.09.2018
 def filter_circle(circle_mask, full_fft_filter):
     temp = np.zeros(full_fft_filter.shape,dtype=complex)
     temp[circle_mask] = full_fft_filter[circle_mask]
