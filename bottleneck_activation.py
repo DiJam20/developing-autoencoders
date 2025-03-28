@@ -28,7 +28,8 @@ def get_bottleneck_activation(model, img: torch.Tensor) -> np.ndarray:
 
 def evaluate_models(test_images: np.ndarray, sae, dae) -> tuple:
     """
-    Evaluate the models by calculating the mean bottleneck activation and the percentage of zeros for each neuron.
+    Evaluate the models by calculating the percentage of zeros for each neuron
+    and the mean of non-zero activations for each neuron.
 
     Args:
         test_images: The test images
@@ -36,19 +37,23 @@ def evaluate_models(test_images: np.ndarray, sae, dae) -> tuple:
         dae: The DAE model
 
     Returns:
-        Tuple containing the mean bottleneck activation for the SAE and DAE models, and the percentage of zeros for each neuron
+        Tuple containing the percentage of zeros for each neuron and the mean of non-zero activations for each neuron
     """
-    # Per neuron statistics
-    sae_activations_sum = None
-    dae_activations_sum = None
+    # Per neuron statistics for zeros tracking
     sae_zeros = None
     dae_zeros = None
+    
+    # For tracking non-zero activations
+    sae_nonzero_counts = None
+    dae_nonzero_counts = None
+    sae_nonzero_sum = None
+    dae_nonzero_sum = None
 
     # Per image statistics
-    sae_per_image_mean = []
-    dae_per_image_mean = []
     sae_per_image_zeros = []
     dae_per_image_zeros = []
+    sae_per_image_nonzero_mean = []
+    dae_per_image_nonzero_mean = []
 
     num_images = 0
     if isinstance(sae, NonLinearAutoencoder):
@@ -64,43 +69,63 @@ def evaluate_models(test_images: np.ndarray, sae, dae) -> tuple:
             sae_activations = get_bottleneck_activation(sae, test_image)
             dae_activations = get_bottleneck_activation(dae, test_image)
 
-            if sae_activations_sum is None:
-                sae_activations_sum = np.zeros_like(sae_activations)
-                dae_activations_sum = np.zeros_like(dae_activations)
+            if sae_zeros is None:
                 sae_zeros = np.zeros_like(sae_activations)
                 dae_zeros = np.zeros_like(dae_activations)
+                sae_nonzero_counts = np.zeros_like(sae_activations)
+                dae_nonzero_counts = np.zeros_like(dae_activations)
+                sae_nonzero_sum = np.zeros_like(sae_activations)
+                dae_nonzero_sum = np.zeros_like(dae_activations)
             
-            # Per neuron statistics
-            sae_activations_sum += sae_activations
-            dae_activations_sum += dae_activations
-            sae_zeros += (np.abs(sae_activations) <= threshold)
-            dae_zeros += (np.abs(dae_activations) <= threshold)
+            # Count zeros
+            sae_is_zero = (np.abs(sae_activations) <= threshold)
+            dae_is_zero = (np.abs(dae_activations) <= threshold)
+            sae_zeros += sae_is_zero
+            dae_zeros += dae_is_zero
+            
+            # Count and sum non-zero activations
+            sae_nonzero_counts += ~sae_is_zero
+            dae_nonzero_counts += ~dae_is_zero
+            sae_nonzero_sum += np.where(sae_is_zero, 0, np.abs(sae_activations))
+            dae_nonzero_sum += np.where(dae_is_zero, 0, np.abs(dae_activations))
 
-            # Per image statistics
-            # Mean activation for all neurons for this image
-            sae_per_image_mean.append(np.mean(np.abs(sae_activations)))
-            dae_per_image_mean.append(np.mean(np.abs(dae_activations)))
             # Percentage of zeros for this image
-            sae_per_image_zeros.append(np.mean(np.abs(sae_activations) < threshold) * 100)
-            dae_per_image_zeros.append(np.mean(np.abs(dae_activations) < threshold) * 100)
-
+            sae_per_image_zeros.append(np.mean(sae_is_zero) * 100)
+            dae_per_image_zeros.append(np.mean(dae_is_zero) * 100)
+            
+            flat_sae_activations = np.abs(sae_activations).reshape(-1)
+            flat_dae_activations = np.abs(dae_activations).reshape(-1)
+            flat_sae_is_zero = sae_is_zero.reshape(-1)
+            flat_dae_is_zero = dae_is_zero.reshape(-1)
+            
+            # Mean of non-zero activations for this image
+            nonzero_sae_values = flat_sae_activations[~flat_sae_is_zero] if flat_sae_is_zero.any() else flat_sae_activations
+            nonzero_dae_values = flat_dae_activations[~flat_dae_is_zero] if flat_dae_is_zero.any() else flat_dae_activations
+            
+            sae_per_image_nonzero_mean.append(np.mean(nonzero_sae_values) if len(nonzero_sae_values) > 0 else 0)
+            dae_per_image_nonzero_mean.append(np.mean(nonzero_dae_values) if len(nonzero_dae_values) > 0 else 0)
 
     # Per neuron statistics
-    sae_mean = sae_activations_sum / num_images
-    dae_mean = dae_activations_sum / num_images
     sae_zeros_percent = (sae_zeros / num_images) * 100
     dae_zeros_percent = (dae_zeros / num_images) * 100
+    
+    # Mean of non-zero activations for each neuron
+    sae_nonzero_mean = np.divide(sae_nonzero_sum, sae_nonzero_counts, 
+                                out=np.zeros_like(sae_nonzero_sum), 
+                                where=sae_nonzero_counts > 0)
+    dae_nonzero_mean = np.divide(dae_nonzero_sum, dae_nonzero_counts, 
+                                out=np.zeros_like(dae_nonzero_sum), 
+                                where=dae_nonzero_counts > 0)
 
-    # Per image statistics to numpy arrays
-    sae_per_image_mean = np.array(sae_per_image_mean)
-    dae_per_image_mean = np.array(dae_per_image_mean)
     sae_per_image_zeros = np.array(sae_per_image_zeros)
     dae_per_image_zeros = np.array(dae_per_image_zeros)
+    sae_per_image_nonzero_mean = np.array(sae_per_image_nonzero_mean)
+    dae_per_image_nonzero_mean = np.array(dae_per_image_nonzero_mean)
     
-    return (sae_mean, dae_mean, 
-            sae_zeros_percent, dae_zeros_percent,
-            sae_per_image_mean, dae_per_image_mean, 
-            sae_per_image_zeros, dae_per_image_zeros)
+    return (sae_zeros_percent, dae_zeros_percent,
+            sae_per_image_zeros, dae_per_image_zeros,
+            sae_nonzero_mean, dae_nonzero_mean,
+            sae_per_image_nonzero_mean, dae_per_image_nonzero_mean)
 
 
 def compute_bottleneck_activation(num_models: int, dataset: str, base_path: str):
@@ -130,16 +155,16 @@ def compute_bottleneck_activation(num_models: int, dataset: str, base_path: str)
         test_images, _ = load_cifar_tensor()
 
     # Per neuron statistics
-    all_sae_means = []
-    all_dae_means = []
     all_sae_zeros = []
     all_dae_zeros = []
+    all_sae_nonzero_means = []
+    all_dae_nonzero_means = []
 
     # Per image statistics
-    all_sae_per_image_means = []
-    all_dae_per_image_means = []
     all_sae_per_image_zeros = []
     all_dae_per_image_zeros = []
+    all_sae_per_image_nonzero_means = []
+    all_dae_per_image_nonzero_means = []
 
     for iteration in tqdm(range(num_models), desc=f"Evaluating all models", leave=True):
         # Load models based on dataset
@@ -150,115 +175,149 @@ def compute_bottleneck_activation(num_models: int, dataset: str, base_path: str)
             sae = load_conv_model(model_path+'sae/'+str(iteration), 'sae', 59)
             dae = load_conv_model(model_path+'dae/'+str(iteration), 'dae', 59, size_ls=[128]*60)
         
-        (sae_mean, dae_mean, 
-         sae_zeros, dae_zeros,
-         sae_per_image_mean, dae_per_image_mean, 
-         sae_per_image_zeros, dae_per_image_zeros) = evaluate_models(test_images, sae, dae)
+        (sae_zeros, dae_zeros,
+         sae_per_image_zeros, dae_per_image_zeros,
+         sae_nonzero_mean, dae_nonzero_mean,
+         sae_per_image_nonzero_mean, dae_per_image_nonzero_mean) = evaluate_models(test_images, sae, dae)
         
-        all_sae_means.append(sae_mean)
-        all_dae_means.append(dae_mean)
         all_sae_zeros.append(sae_zeros)
         all_dae_zeros.append(dae_zeros)
+        all_sae_nonzero_means.append(sae_nonzero_mean)
+        all_dae_nonzero_means.append(dae_nonzero_mean)
 
-        all_sae_per_image_means.append(sae_per_image_mean)
-        all_dae_per_image_means.append(dae_per_image_mean)
         all_sae_per_image_zeros.append(sae_per_image_zeros)
         all_dae_per_image_zeros.append(dae_per_image_zeros)
+        all_sae_per_image_nonzero_means.append(sae_per_image_nonzero_mean)
+        all_dae_per_image_nonzero_means.append(dae_per_image_nonzero_mean)
 
     # Average per neuron statistics
-    sae_means_sum = np.zeros_like(all_sae_means[0])
-    dae_means_sum = np.zeros_like(all_dae_means[0])
     sae_zeros_sum = np.zeros_like(all_sae_zeros[0])
     dae_zeros_sum = np.zeros_like(all_dae_zeros[0])
+    sae_nonzero_means_sum = np.zeros_like(all_sae_nonzero_means[0])
+    dae_nonzero_means_sum = np.zeros_like(all_dae_nonzero_means[0])
     
     for i in range(num_models):
-        sae_means_sum += all_sae_means[i]
-        dae_means_sum += all_dae_means[i]
         sae_zeros_sum += all_sae_zeros[i]
         dae_zeros_sum += all_dae_zeros[i]
+        sae_nonzero_means_sum += all_sae_nonzero_means[i]
+        dae_nonzero_means_sum += all_dae_nonzero_means[i]
     
-    mean_sae = sae_means_sum / num_models
-    mean_dae = dae_means_sum / num_models
     mean_sae_zeros = sae_zeros_sum / num_models
     mean_dae_zeros = dae_zeros_sum / num_models
+    mean_sae_nonzero = sae_nonzero_means_sum / num_models
+    mean_dae_nonzero = dae_nonzero_means_sum / num_models
     
     # Average per image statistics
-    sae_per_image_means_avg = np.zeros_like(all_sae_per_image_means[0])
-    dae_per_image_means_avg = np.zeros_like(all_dae_per_image_means[0])
     sae_per_image_zeros_avg = np.zeros_like(all_sae_per_image_zeros[0])
     dae_per_image_zeros_avg = np.zeros_like(all_dae_per_image_zeros[0])
+    sae_per_image_nonzero_means_avg = np.zeros_like(all_sae_per_image_nonzero_means[0])
+    dae_per_image_nonzero_means_avg = np.zeros_like(all_dae_per_image_nonzero_means[0])
     
     for i in range(num_models):
-        sae_per_image_means_avg += all_sae_per_image_means[i]
-        dae_per_image_means_avg += all_dae_per_image_means[i]
         sae_per_image_zeros_avg += all_sae_per_image_zeros[i]
         dae_per_image_zeros_avg += all_dae_per_image_zeros[i]
+        sae_per_image_nonzero_means_avg += all_sae_per_image_nonzero_means[i]
+        dae_per_image_nonzero_means_avg += all_dae_per_image_nonzero_means[i]
     
-    sae_per_image_means_avg /= num_models
-    dae_per_image_means_avg /= num_models
     sae_per_image_zeros_avg /= num_models
     dae_per_image_zeros_avg /= num_models
+    sae_per_image_nonzero_means_avg /= num_models
+    dae_per_image_nonzero_means_avg /= num_models
+    
+    # Create Results directory if it doesn't exist
+    os.makedirs("Results", exist_ok=True)
     
     np.save(result_file, {
-        'mean_sae': mean_sae,
-        'mean_dae': mean_dae,
+        # Save only the metrics we care about
         'mean_sae_zeros': mean_sae_zeros,
         'mean_dae_zeros': mean_dae_zeros,
+        'mean_sae_nonzero': mean_sae_nonzero,
+        'mean_dae_nonzero': mean_dae_nonzero,
         
-        'sae_per_image_means': sae_per_image_means_avg,
-        'dae_per_image_means': dae_per_image_means_avg,
         'sae_per_image_zeros': sae_per_image_zeros_avg,
-        'dae_per_image_zeros': dae_per_image_zeros_avg
+        'dae_per_image_zeros': dae_per_image_zeros_avg,
+        'sae_per_image_nonzero_means': sae_per_image_nonzero_means_avg,
+        'dae_per_image_nonzero_means': dae_per_image_nonzero_means_avg
     })
 
 
 def plot_activation_per_neuron(dataset: str):
     """
-    Plot the mean activation per neuron for the SAE and DAE models.
+    Plot the mean non-zero activation per neuron for the SAE and DAE models,
+    grouped by neuron ranges and displayed as a bar chart with error bars.
     
     Args:
         dataset: Dataset used for training ('mnist' or 'cifar')
     """
     if dataset.lower() == "mnist":
-        MAX_NEURONS = 32
+        neuron_groups = [4, 10, 16, 24, 32]
     elif dataset.lower() == "cifar":
-        MAX_NEURONS = 128
+        neuron_groups = [6, 10, 16, 28, 48, 90, 128]
         
     result_file = f"Results/{dataset}_bottleneck_activation.npy"
     results = np.load(result_file, allow_pickle=True).item()
-    sae_mean = abs(results['mean_sae'].squeeze())
-    dae_mean = abs(results['mean_dae'].squeeze())
+    
+    sae_mean = results['mean_sae_nonzero'].squeeze()
+    dae_mean = results['mean_dae_nonzero'].squeeze()
 
+    start_indices = [0]
+    for i in range(1, len(neuron_groups)):
+        start_indices.append(neuron_groups[i-1])
+    
+    # Labels for each neuron group
+    x_labels = []
+    for start, end in zip(start_indices, neuron_groups):
+        x_labels.append(f"{start+1}-{end}")
+    
+    # Group the neurons and calculate mean and std for each group
+    sae_group_means = []
+    dae_group_means = []
+    sae_group_stds = []
+    dae_group_stds = []
+    
+    for i, (start, end) in enumerate(zip(start_indices, neuron_groups)):
+        sae_group = sae_mean[start:end]
+        dae_group = dae_mean[start:end]
+        
+        sae_group_means.append(np.mean(sae_group))
+        dae_group_means.append(np.mean(dae_group))
+        sae_group_stds.append(np.std(sae_group))
+        dae_group_stds.append(np.std(dae_group))
+    
     plt.rc('font', size=16)
     
-    if dataset.lower() == "mnist":
-        plt.figure(figsize=(6, 4))
-    else:
-        plt.figure(figsize=(12, 6))
-
-    x = np.arange(1, MAX_NEURONS + 1)
-    plt.plot(x, sae_mean, label='AE', color='#1a7adb', linewidth=2)
-    plt.plot(x, dae_mean, label='DevAE', color='#e82817', linewidth=2)
-
-    plt.xlabel('Neuron Index')
-    plt.ylabel('Activation')
-    plt.title(f'Mean Activation per Neuron ({dataset.upper()})', pad=20)
-
+    plt.figure(figsize=(12, 6))
+    
+    x_indices = np.arange(len(neuron_groups))
+    width = 0.35
+    
+    plt.bar(x_indices - width/2, sae_group_means, width, label='AE', color='#1a7adb',
+            yerr=sae_group_stds, capsize=5)
+    plt.bar(x_indices + width/2, dae_group_means, width, label='Dev-AE', color='#e82817',
+            yerr=dae_group_stds, capsize=5)
+    
+    plt.xlabel('Neuron Group')
+    plt.ylabel('Mean Non-Zero Activation')
+    plt.title(f'Mean Non-Zero Activation per Neuron Group ({dataset.upper()})', pad=20)
+    
+    plt.xticks(x_indices, x_labels)
+    
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    plt.ylim(bottom=0)
     plt.legend(loc='upper right')
     plt.tight_layout()
-
-    plt.savefig(f'Results/figures/png/{dataset}_activation_per_neuron.png', bbox_inches='tight', dpi=300)
-    plt.savefig(f'Results/figures/svg/{dataset}_activation_per_neuron.svg', bbox_inches='tight')
+    
+    plt.savefig(f'Results/figures/png/{dataset}_nonzero_activation_per_neuron.png', bbox_inches='tight', dpi=300)
+    plt.savefig(f'Results/figures/svg/{dataset}_nonzero_activation_per_neuron.svg', bbox_inches='tight')
     plt.close()
 
 
 def plot_zeros_per_neuron(dataset: str = "mnist"):
     """
     Plot the percentage of zero activations per neuron for the SAE and DAE models,
-    grouped by neuron ranges and displayed in separate subplots.
+    grouped by neuron ranges and displayed as a grouped bar chart.
     
     Args:
         dataset: Dataset used for training ('mnist' or 'cifar')
@@ -273,12 +332,11 @@ def plot_zeros_per_neuron(dataset: str = "mnist"):
     mean_sae_zeros = results['mean_sae_zeros'].squeeze()
     mean_dae_zeros = results['mean_dae_zeros'].squeeze()
     
-    # Calculate start indices for each neuron group
     start_indices = [0]
     for i in range(1, len(neuron_groups)):
         start_indices.append(neuron_groups[i-1])
     
-    # Create labels for each neuron group
+    # Labels for each neuron group
     x_labels = []
     for start, end in zip(start_indices, neuron_groups):
         x_labels.append(f"{start+1}-{end}")
@@ -298,80 +356,33 @@ def plot_zeros_per_neuron(dataset: str = "mnist"):
         sae_group_stds.append(np.std(sae_group))
         dae_group_stds.append(np.std(dae_group))
     
-    plt.rc('font', size=20)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), dpi=300)
-    
-    # Plot SAE
-    x_indices = np.arange(len(neuron_groups))
-    sae_bars = ax1.bar(x_indices, sae_group_means, color='#1a7adb', yerr=sae_group_stds, capsize=5)
-    ax1.set_xticks(x_indices)
-    ax1.set_xticklabels(x_labels)
-    ax1.set_ylabel('Percentage of Zero Activations')
-    ax1.set_xlabel('Neuron Group')
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
-    ax1.set_title('AE', fontsize=22)
-    
-    # Plot DAE
-    dae_bars = ax2.bar(x_indices, dae_group_means, color='#e82817', yerr=dae_group_stds, capsize=5)
-    ax2.set_xticks(x_indices)
-    ax2.set_xticklabels(x_labels)
-    ax2.set_xlabel('Neuron Group')
-    ax2.spines['top'].set_visible(False)
-    ax2.spines['right'].set_visible(False)
-    ax2.spines['left'].set_visible(False)
-    ax2.yaxis.set_visible(False)
-    ax2.set_ylabel('')
-    ax2.set_title('DevAE', fontsize=22)
-    
-    # Set the same y-limit for both plots
-    max_val = max(
-        max(sae_group_means) + max(sae_group_stds),
-        max(dae_group_means) + max(dae_group_stds)
-    )
-    ax1.set_ylim(0, max_val * 1.1)
-    ax2.set_ylim(0, max_val * 1.1)
-    
-    fig.suptitle(f'Neuron Activation Sparsity by Group ({dataset.upper()})', fontsize=24, y=1.05)
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
-    
-    plt.savefig(f'Results/figures/png/{dataset}_zeros_per_neuron_grouped.png', bbox_inches='tight', dpi=300)
-    plt.savefig(f'Results/figures/svg/{dataset}_zeros_per_neuron_grouped.svg', bbox_inches='tight')
-    plt.close()
-
-
-def plot_per_image_activation_distribution(dataset: str):
-    """
-    Plot the distribution of mean activations per image for SAE and DAE models.
-    
-    Args:
-        dataset: Dataset used for training ('mnist' or 'cifar')
-    """
-    result_file = f"Results/{dataset}_bottleneck_activation.npy"
-    results = np.load(result_file, allow_pickle=True).item()
-    
-    sae_per_image_means = results['sae_per_image_means']
-    dae_per_image_means = results['dae_per_image_means']
-    
     plt.rc('font', size=16)
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 6))
     
-    plt.hist(sae_per_image_means, alpha=0.6, label='AE', color='#1a7adb')
-    plt.hist(dae_per_image_means, alpha=0.6, label='DevAE', color='#e82817')
+    # Create a grouped bar plot
+    x_indices = np.arange(len(neuron_groups))
+    width = 0.35
     
-    plt.xlabel('Mean Activation per Image')
-    plt.ylabel('Number of Images')
-    plt.title(f'Neuron Activation per Image ({dataset.upper()})', pad=20)
+    plt.bar(x_indices - width/2, sae_group_means, width, label='AE', color='#1a7adb',
+            yerr=sae_group_stds, capsize=5)
+    plt.bar(x_indices + width/2, dae_group_means, width, label='Dev-AE', color='#e82817',
+            yerr=dae_group_stds, capsize=5)
+    
+    plt.xlabel('Neuron Group')
+    plt.ylabel('Percentage of Zero Activations')
+    plt.title(f'Neuron Activation Sparsity by Group ({dataset.upper()})', pad=20)
+    
+    plt.xticks(x_indices, x_labels)
     
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    plt.ylim(bottom=0)
     plt.legend(loc='upper right')
     plt.tight_layout()
     
-    plt.savefig(f'Results/figures/png/{dataset}_per_image_activation_dist.png', bbox_inches='tight', dpi=300)
-    plt.savefig(f'Results/figures/svg/{dataset}_per_image_activation_dist.svg', bbox_inches='tight')
+    plt.savefig(f'Results/figures/png/{dataset}_zeros_per_neuron.png', bbox_inches='tight', dpi=300)
+    plt.savefig(f'Results/figures/svg/{dataset}_zeros_per_neuron.svg', bbox_inches='tight')
     plt.close()
 
 
@@ -392,7 +403,7 @@ def plot_per_image_zeros_distribution(dataset: str):
     plt.figure(figsize=(10, 6))
     
     plt.hist(sae_per_image_zeros, alpha=0.6, label='AE', color='#1a7adb')
-    plt.hist(dae_per_image_zeros, alpha=0.6, label='DevAE', color='#e82817')
+    plt.hist(dae_per_image_zeros, alpha=0.6, label='Dev-AE', color='#e82817')
     
     plt.xlabel('Percentage of Zero Activations per Image')
     plt.ylabel('Number of Images')
@@ -406,6 +417,40 @@ def plot_per_image_zeros_distribution(dataset: str):
     
     plt.savefig(f'Results/figures/png/{dataset}_per_image_zeros_dist.png', bbox_inches='tight', dpi=300)
     plt.savefig(f'Results/figures/svg/{dataset}_per_image_zeros_dist.svg', bbox_inches='tight')
+    plt.close()
+
+
+def plot_per_image_activation_distribution(dataset: str):
+    """
+    Plot the distribution of mean non-zero activations per image for SAE and DAE models.
+    
+    Args:
+        dataset: Dataset used for training ('mnist' or 'cifar')
+    """
+    result_file = f"Results/{dataset}_bottleneck_activation.npy"
+    results = np.load(result_file, allow_pickle=True).item()
+    
+    sae_per_image_nonzero_means = results['sae_per_image_nonzero_means']
+    dae_per_image_nonzero_means = results['dae_per_image_nonzero_means']
+    
+    plt.rc('font', size=16)
+    plt.figure(figsize=(10, 6))
+    
+    plt.hist(sae_per_image_nonzero_means, alpha=0.6, label='AE', color='#1a7adb')
+    plt.hist(dae_per_image_nonzero_means, alpha=0.6, label='Dev-AE', color='#e82817')
+    
+    plt.xlabel('Mean Non-Zero Activation per Image')
+    plt.ylabel('Number of Images')
+    plt.title(f'Non-Zero Neuron Activation per Image ({dataset.upper()})', pad=20)
+    
+    ax = plt.gca()
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    plt.legend(loc='upper right')
+    plt.tight_layout()
+    
+    plt.savefig(f'Results/figures/png/{dataset}_per_image_nonzero_activation_dist.png', bbox_inches='tight', dpi=300)
+    plt.savefig(f'Results/figures/svg/{dataset}_per_image_nonzero_activation_dist.svg', bbox_inches='tight')
     plt.close()
 
 
