@@ -5,7 +5,7 @@ from rf_stability import analyze_rf_stability
 from rf_specificity import compute_rf_specificity
 from hidden_layer_statistics import compute_hidden_layer_activation
 from plot_hidden_layer_statistics import plot_hidden_layer_activation
-from power_spectra import plot_power_spectra
+from power_spectra import *
 from pc_noise import *
 from bottleneck_activation import run_bottleneck_activation_analysis
 from encoding_noise import run_encoding_noise_analysis
@@ -48,8 +48,8 @@ def main():
 
     # compute_rfs("sae", dataset='mnist', size_ls=None, num_models=2, num_epochs=60)
     # compute_rfs("dae", dataset='mnist', size_ls=mnist_size_ls, num_models=2, num_epochs=60)
-    # compute_rfs("sae", dataset='cifar', size_ls=None, num_models=1, num_epochs=60)
-    # compute_rfs("dae", dataset='cifar', size_ls=cifar_size_ls, num_models=2, num_epochs=60)
+    compute_rfs("sae", dataset='cifar', size_ls=None, num_models=40, num_epochs=60)
+    compute_rfs("dae", dataset='cifar', size_ls=cifar_size_ls, num_models=40, num_epochs=60)
 
     # analyze_rf_stability("sae", dataset='mnist', compare_final_epoch=True, size_ls=None, num_models=2, num_epochs=60)
     # analyze_rf_stability("dae", dataset='mnist', compare_final_epoch=True, size_ls=mnist_size_ls, num_models=2, num_epochs=60)
@@ -68,7 +68,7 @@ def main():
     # plot_hidden_layer_activation(model_arch='conv')
 
     # neuron_groups = [6, 10, 16, 28, 90, 128]
-    # plot_power_spectra('Results/sae_maxact.npy', 'Results/dae_maxact.npy', 1, 0, neuron_groups=neuron_groups)
+    # analyze_power_spectra('Results/cifar_sae_rfs.npy', 'Results/cifar_dae_rfs.npy', 2, 59, neuron_groups=neuron_groups)
 
 
     # run_bottleneck_activation_analysis(40, 'mnist', base_path)
@@ -90,9 +90,9 @@ def main():
     # run_classification_importance_analysis(40, dataset="mnist", size_ls=mnist_size_ls)
     # run_classification_importance_analysis(10, dataset="cifar", size_ls=cifar_size_ls)
 
-    run_all_frequency_analyses(40, 10, base_path)
+    # run_all_frequency_analyses(40, 10, base_path)
 
-    create_reconstruction_examples(base_path)
+    # create_reconstruction_examples(base_path)
 
 if __name__ == "__main__":
     main()
