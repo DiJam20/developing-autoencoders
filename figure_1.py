@@ -103,7 +103,7 @@ def plot_accuracy_over_epochs(sae_train_loss, dae_train_loss, sae_vali_loss, dae
     ax.tick_params(axis='both', which='major', labelsize=TICK_SIZE)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.set_title('Loss', fontsize=TITLE_SIZE, pad=20)
+    # ax.set_title('Loss', fontsize=TITLE_SIZE, pad=20)
     
     train_legend = ax.legend([sae_train_line, dae_train_line], ['AE', 'Dev-AE'],
                            bbox_to_anchor=(1.0, 1.0),
@@ -160,7 +160,7 @@ def plot_dimensionality_comparison(dataset, ax):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.legend(fontsize=LEGEND_SIZE)
-    ax.set_title('Dimensionality', fontsize=TITLE_SIZE, pad=20)
+    # ax.set_title('Dimensionality', fontsize=TITLE_SIZE, pad=20)
 
 
 # PLOT RECONSTRUCTIONS
@@ -237,7 +237,7 @@ def plot_reconstructions(dataset, base_path, iteration, num_examples, ax):
                             transform=curr_ax.transAxes, ha='center', va='center',
                             fontsize=LABEL_SIZE)
     
-    ax.set_title('Reconstructions', fontsize=TITLE_SIZE, pad=20)
+    # ax.set_title('Reconstructions', fontsize=TITLE_SIZE, pad=20)
     ax.axis('off')
 
 
@@ -280,8 +280,8 @@ def create_combined_figure(sae_train_loss, dae_train_loss, sae_vali_loss, dae_va
     ax3.text(label_x, label_y, 'C', transform=ax3.transAxes, 
              fontsize=TITLE_SIZE, fontweight='bold')
         
-    plt.savefig(f"Results/figures/png/cifar_combined_analysis.png", bbox_inches='tight', dpi=300)
-    plt.savefig(f"Results/figures/svg/cifar_combined_analysis.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/png/figure_1.png", bbox_inches='tight', dpi=300)
+    plt.savefig(f"Results/figures/svg/figure_1.svg", bbox_inches='tight')
     plt.close()
 
 
