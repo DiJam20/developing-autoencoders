@@ -432,7 +432,7 @@ def run_frequency_classification_analysis(iteration, dataset="mnist", base_path=
     return results
 
 
-def compute_average_frequency_classification(num_models, dataset="mnist", base_path="/home/david/", noise_scale=1.0):
+def compute_average_frequency_classification(num_models, dataset="mnist", base_path="/home/david/", noise_scale=1.0, create_plots=True):
     """
     Compute average frequency classification over multiple model iterations.
     
@@ -526,7 +526,8 @@ def compute_average_frequency_classification(num_models, dataset="mnist", base_p
     
     p_values = load_and_calculate_pvalues(dataset)
     
-    plot_frequency_classification_results(avg_results, dataset, std_results, p_values)
+    if create_plots:
+        plot_frequency_classification_results(avg_results, dataset, std_results, p_values)
     
     return avg_results, std_results
 
@@ -602,9 +603,9 @@ def visualize_frequency_noise(image_idx, dataset="mnist", noise_scale=1, save_pa
         ax.axis('off')
     
     plot_image(axes[0], original_image, f"Original")
-    plot_image(axes[1], low_freq_image, f"Low Frequency Noise\n(0-3)", low_freq_mse, low_noise_scale)
-    plot_image(axes[2], mid_freq_image, f"Medium Frequency Noise\n(4-7)", mid_freq_mse, mid_noise_scale)
-    plot_image(axes[3], high_freq_image, f"High Frequency Noise\n(8-16)", high_freq_mse, high_noise_scale)
+    plot_image(axes[1], low_freq_image, f"Low Frequency Noise", low_freq_mse, low_noise_scale)
+    plot_image(axes[2], mid_freq_image, f"Medium Frequency Noise", mid_freq_mse, mid_noise_scale)
+    plot_image(axes[3], high_freq_image, f"High Frequency Noise", high_freq_mse, high_noise_scale)
     
     plt.suptitle(f"Image with Different Frequency Noise Types", fontsize=24, y=1.05)
     plt.tight_layout()

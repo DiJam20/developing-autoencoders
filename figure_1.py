@@ -282,6 +282,7 @@ def create_combined_figure(sae_train_loss, dae_train_loss, sae_vali_loss, dae_va
         
     plt.savefig(f"Results/figures/png/figure_1.png", bbox_inches='tight', dpi=300)
     plt.savefig(f"Results/figures/svg/figure_1.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/eps/figure_1.eps", bbox_inches='tight')
     plt.close()
 
 

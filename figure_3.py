@@ -56,6 +56,7 @@ def create_figure_3(dataset='cifar'):
     
     plt.savefig(f"Results/figures/png/{dataset}_figure_3.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/{dataset}_figure_3.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/eps/{dataset}_figure_3.eps", bbox_inches='tight')
     plt.close()
 
 
@@ -161,7 +162,7 @@ def plot_pc_rankings(ax, dataset="cifar"):
     
     ax1.set_title("AE", fontsize=LABEL_SIZE)
     ax1.set_xlabel("Neuron Index", fontsize=LABEL_SIZE)
-    ax1.set_ylabel("PC Range", fontsize=LABEL_SIZE)
+    ax1.set_ylabel("Perturbed PC Range", fontsize=LABEL_SIZE)
     ax1.tick_params(axis='y', labelsize=TICK_SIZE)
     
     # DAE
@@ -278,7 +279,7 @@ def plot_frequency_classification(ax, dataset="cifar"):
     ax.set_xlabel('Frequency Noise Type', fontsize=LABEL_SIZE)
     ax.set_ylabel('Classification Accuracy', fontsize=LABEL_SIZE)
     ax.set_xticks(x)
-    ax.set_xticklabels(['Clean', 'Low\n(0-3)', 'Medium\n(4-7)', 'High\n(8-16)'], fontsize=TICK_SIZE)
+    ax.set_xticklabels(['Clean', 'Low', 'Medium', 'High'], fontsize=TICK_SIZE)
     ax.tick_params(axis='y', labelsize=TICK_SIZE)
     ax.legend(loc='upper right', bbox_to_anchor=(1, 1.15), fontsize=LEGEND_SIZE)
     ax.spines['top'].set_visible(False)
@@ -391,7 +392,7 @@ else:
     neuron_groups = [6, 12, 18, 28, 48, 90, 128]
     
 compute_pc_noise_analysis(NUM_MODELS, manipulated_neurons, DATASET, BASE_PATH)
-compute_average_frequency_classification(NUM_MODELS, DATASET, BASE_PATH, noise_scale=1.0)
+compute_average_frequency_classification(NUM_MODELS, DATASET, BASE_PATH, noise_scale=1.0, create_plots=False)
 compute_neuron_importance(NUM_MODELS, DATASET, BASE_PATH, neuron_groups)
 
 create_figure_3(DATASET)

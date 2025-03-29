@@ -22,7 +22,7 @@ def create_figure_4(dataset='cifar'):
     Args:
         dataset: Dataset name ('cifar')
     """    
-    fig = plt.figure(figsize=(20, 8))
+    fig = plt.figure(figsize=(20, 6))
     
     gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1], wspace=0.3)
     
@@ -33,15 +33,17 @@ def create_figure_4(dataset='cifar'):
     plot_activation_per_neuron(ax_right, dataset)
     
     # Add figure labels
-    ax_left.text(-0.15, 1.1, 'A', transform=ax_left.transAxes, 
+    label_x, label_y = -0.15, 1.05
+    ax_left.text(label_x, label_y, 'A', transform=ax_left.transAxes, 
                 fontsize=TITLE_SIZE, fontweight='bold')
-    ax_right.text(-0.15, 1.1, 'B', transform=ax_right.transAxes, 
+    ax_right.text(label_x, label_y, 'B', transform=ax_right.transAxes, 
                  fontsize=TITLE_SIZE, fontweight='bold')
     
     plt.tight_layout()
     
     plt.savefig(f"Results/figures/png/{dataset}_figure_4.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/{dataset}_figure_4.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/eps/{dataset}_figure_4.eps", bbox_inches='tight')
     plt.close()
 
 
@@ -170,7 +172,7 @@ def plot_zeros_per_neuron(ax, dataset="cifar"):
           yerr=dae_group_stds_scaled, capsize=5)
     
     ax.set_xlabel('Neuron Groups', fontsize=LABEL_SIZE)
-    ax.set_ylabel('Neuron Sparsity (×10³)', fontsize=LABEL_SIZE)
+    ax.set_ylabel('% Zero Activation (×10³)', fontsize=LABEL_SIZE)
 
     ax.set_xticks(x_indices)
     ax.set_xticklabels(x_labels, fontsize=TICK_SIZE, rotation=90)
@@ -179,8 +181,8 @@ def plot_zeros_per_neuron(ax, dataset="cifar"):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_ylim(bottom=0)
-    ax.legend(loc='upper right', fontsize=LEGEND_SIZE)
+    # ax.legend(loc='upper right', fontsize=LEGEND_SIZE)
 
 
 compute_bottleneck_activation(NUM_MODELS, DATASET, BASE_PATH)
-create_figure_4(DATASET, NUM_MODELS)
+create_figure_4(DATASET)

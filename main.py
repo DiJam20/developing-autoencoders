@@ -19,6 +19,7 @@ def main():
 
     os.makedirs("Results/figures/png", exist_ok=True)
     os.makedirs("Results/figures/svg", exist_ok=True)
+    os.makedirs("Results/figures/eps", exist_ok=True)
 
     mnist_size_ls = [4, 4, 4, 4, 4, 10,
             10, 10, 10, 10, 16, 16,

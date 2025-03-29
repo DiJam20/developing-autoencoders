@@ -41,10 +41,6 @@ cifar_size_ls = [6, 6, 6, 6, 6, 6,
 # Neuron group endpoints
 neuron_groups = [6, 12, 18, 28, 48, 90, 128]
 
-os.makedirs("Results/figures/png", exist_ok=True)
-os.makedirs("Results/figures/svg", exist_ok=True)
-
-
 def create_figure_2(dataset='cifar', num_models=2, final_epoch=59):
     """
     Create Figure 2 with three subplots:
@@ -85,6 +81,7 @@ def create_figure_2(dataset='cifar', num_models=2, final_epoch=59):
     
     plt.savefig(f"Results/figures/png/{dataset}_figure_2.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/{dataset}_figure_2.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/eps/{dataset}_figure_2.eps", bbox_inches='tight')
     plt.close()
 
 def plot_example_rfs(ax, dataset='cifar', epoch_idx=59):

@@ -5,6 +5,7 @@ import torch
 from tqdm import tqdm
 from model_utils import *
 
+
 #Author: Francesco Mottes
 #Date  : 15-Oct-2019
 #-----------------------------
@@ -176,7 +177,7 @@ def plot_dimensionality_comparison(dataset):
 
     plt.xlabel('Epoch', fontsize=18)
     plt.ylabel('Intrinsic Dimensionality', fontsize=18)
-    plt.title(f'Bottleneck Dimensionality During Training ({dataset.upper()})', fontsize=20, pad=20)
+    plt.title(f'Dimensionality ({dataset.upper()})', fontsize=20, pad=20)
     plt.xticks(fontsize=16)
     plt.yticks(fontsize=16)
     plt.legend(fontsize=16, loc='lower right')
