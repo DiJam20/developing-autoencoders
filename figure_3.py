@@ -382,32 +382,16 @@ def plot_neuron_importance(ax, dataset="cifar"):
     ax.text(0.5, -0.4, 'Neuron Groups', ha='center', fontsize=LABEL_SIZE, transform=ax.transAxes)
 
 
-def run_analysis_and_create_figure(dataset='cifar', num_models=2, base_path="/home/david/"):
-    """
-    Run all necessary analyses and create the figure.
-    
-    Args:
-        dataset: Dataset name ('mnist' or 'cifar')
-        num_models: Number of models to evaluate
-        base_path: Base path to the model directory
-    """
-    if dataset.lower() == "mnist":
-        manipulated_neurons = [(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)]
-        neuron_groups = [6, 12, 18, 28, 48, 90, 128]
-    else:
-        manipulated_neurons = [(0, 6), (6, 10), (10, 16), (16, 28), (28, 48), (48, 90), (90, 128)]
-        neuron_groups = [6, 12, 18, 28, 48, 90, 128]
-        
-    # 1. PC Noise Analysis for subplot A
-    compute_pc_noise_analysis(num_models, manipulated_neurons, dataset, base_path)
-    
-    # 2. Frequency Classification for subplot B
-    compute_average_frequency_classification(num_models, dataset, base_path, noise_scale=1.0)
-    
-    # 3. Neuron Importance for subplot C
-    compute_neuron_importance(num_models, dataset, base_path, neuron_groups)
 
-    create_figure_3(dataset, num_models)
+if DATASET.lower() == "mnist":
+    manipulated_neurons = [(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)]
+    neuron_groups = [6, 12, 18, 28, 48, 90, 128]
+else:
+    manipulated_neurons = [(0, 6), (6, 10), (10, 16), (16, 28), (28, 48), (48, 90), (90, 128)]
+    neuron_groups = [6, 12, 18, 28, 48, 90, 128]
+    
+compute_pc_noise_analysis(NUM_MODELS, manipulated_neurons, DATASET, BASE_PATH)
+compute_average_frequency_classification(NUM_MODELS, DATASET, BASE_PATH, noise_scale=1.0)
+compute_neuron_importance(NUM_MODELS, DATASET, BASE_PATH, neuron_groups)
 
-
-run_analysis_and_create_figure(DATASET, NUM_MODELS, BASE_PATH)
+create_figure_3(DATASET)

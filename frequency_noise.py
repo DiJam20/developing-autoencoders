@@ -6,7 +6,8 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 import torch
-import umap
+# import umap
+from scipy import stats
 
 from autoencoder import *
 from model_utils import *
@@ -20,7 +21,6 @@ def encode_dataset(model, dataset_images, dataset="mnist"):
     Args:
         model: Trained autoencoder model
         dataset_images: Images from the dataset
-        dataset_labels: Labels from the dataset
         dataset: Dataset name ('mnist' or 'cifar')
         
     Returns:
@@ -163,7 +163,62 @@ def evaluate_frequency_classification(sae_model, dae_model, dataset="mnist", noi
     }
 
 
-def plot_frequency_classification_results(results, dataset="mnist", std_devs=None):
+def load_and_calculate_pvalues(dataset="mnist"):
+    """
+    Load results and calculate p-values for each noise type.
+    
+    Args:
+        dataset: Dataset name ('mnist' or 'cifar')
+        
+    Returns:
+        Dictionary with p-values for each noise type
+    """
+    # Load all individual results (not just averages)
+    all_results_file = f"Results/{dataset}_all_frequency_classification.npy"
+    
+    try:
+        all_results = np.load(all_results_file, allow_pickle=True).item()
+    except FileNotFoundError:
+        print(f"Error: Could not find {all_results_file}")
+        print("Make sure you've run the main script to generate all results.")
+        return None
+    
+    # Calculate p-values for each noise type using arrays of individual measurements
+    # Clean images
+    _, p_clean = stats.ttest_rel(
+        all_results['sae_clean_acc'],
+        all_results['dae_clean_acc']
+    )
+    
+    # Low frequency noise
+    _, p_low = stats.ttest_rel(
+        all_results['sae_low_freq_acc'],
+        all_results['dae_low_freq_acc']
+    )
+    
+    # Mid frequency noise
+    _, p_mid = stats.ttest_rel(
+        all_results['sae_mid_freq_acc'],
+        all_results['dae_mid_freq_acc']
+    )
+    
+    # High frequency noise
+    _, p_high = stats.ttest_rel(
+        all_results['sae_high_freq_acc'],
+        all_results['dae_high_freq_acc']
+    )
+    
+    p_values = {
+        'clean': p_clean,
+        'low_freq': p_low,
+        'mid_freq': p_mid,
+        'high_freq': p_high
+    }
+        
+    return p_values
+
+
+def plot_frequency_classification_results(results, dataset="mnist", std_devs=None, p_values=None):
     """
     Plot a bar chart with clean and frequency noise types for SAE and DAE models.
     
@@ -171,6 +226,7 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
         results: Results dictionary with accuracies
         dataset: Dataset name ('mnist' or 'cifar')
         std_devs: Dictionary with standard deviations for error bars
+        p_values: Dictionary with p-values for significance testing
     """    
     plt.figure(figsize=(14, 8))
     
@@ -203,10 +259,11 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
     x = np.arange(4)
     width = 0.35
     
-    plt.bar(x - width/2, sae_accs, width, label='SAE', color='#1a7adb', 
-            yerr=sae_errors, capsize=5)
-    plt.bar(x + width/2, dae_accs, width, label='DAE', color='#e82817', 
-            yerr=dae_errors, capsize=5)
+    # Create the bar plots
+    sae_bars = plt.bar(x - width/2, sae_accs, width, label='SAE', color='#1a7adb', 
+                      yerr=sae_errors, capsize=5)
+    dae_bars = plt.bar(x + width/2, dae_accs, width, label='DAE', color='#e82817', 
+                      yerr=dae_errors, capsize=5)
     
     plt.xlabel('Noise Type')
     plt.ylabel('Classification Accuracy')
@@ -216,119 +273,136 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     
+    # Add significance markers if p-values are provided
+    if p_values is not None:
+        # Add significance markers based on p-values
+        p_list = [p_values.get('clean', 1), 
+                 p_values.get('low_freq', 1), 
+                 p_values.get('mid_freq', 1), 
+                 p_values.get('high_freq', 1)]
+        
+        for i, p in enumerate(p_list):
+            bar_height = max(sae_accs[i], dae_accs[i])
+            y_pos = bar_height + max(sae_errors[i], dae_errors[i]) + 0.01
+            
+            if p < 0.05:
+                plt.text(x[i], y_pos, '*', ha='center', va='bottom', fontsize=16)
+            else:
+                plt.text(x[i], y_pos, 'ns', ha='center', va='bottom', fontsize=10)
+    
     plt.savefig(f"Results/figures/png/{dataset}_all_freq_classification.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/{dataset}_all_freq_classification.svg", bbox_inches='tight')
     plt.close()
 
 
-def plot_umap_visualizations(sae_model, dae_model, dataset="mnist"):
-    """
-    Create UMAP visualizations for clean and frequency-noisy encodings.
+# def plot_umap_visualizations(sae_model, dae_model, dataset="mnist"):
+#     """
+#     Create UMAP visualizations for clean and frequency-noisy encodings.
     
-    Args:
-        sae_model: SAE model
-        dae_model: DAE model
-        dataset: Dataset name ('mnist' or 'cifar')
-    """
-    # Load clean test images
-    if dataset.lower() == "mnist":
-        clean_images, labels = load_mnist_list()
-    else:
-        clean_images, labels = load_cifar_list()
+#     Args:
+#         sae_model: SAE model
+#         dae_model: DAE model
+#         dataset: Dataset name ('mnist' or 'cifar')
+#     """
+#     # Load clean test images
+#     if dataset.lower() == "mnist":
+#         clean_images, labels = load_mnist_list()
+#     else:
+#         clean_images, labels = load_cifar_list()
     
-    # Create noisy images with different frequency bands
-    low_freq_images, mid_freq_images, high_freq_images, _ = create_frequency_noisy_images(dataset)
+#     # Create noisy images with different frequency bands
+#     low_freq_images, mid_freq_images, high_freq_images, _ = create_frequency_noisy_images(dataset)
     
-    # Encode clean and noisy images
-    sae_clean_encodings, _ = encode_dataset(sae_model, clean_images, labels, dataset)
-    dae_clean_encodings, _ = encode_dataset(dae_model, clean_images, labels, dataset)
+#     # Encode clean and noisy images
+#     sae_clean_encodings, _ = encode_dataset(sae_model, clean_images, labels, dataset)
+#     dae_clean_encodings, _ = encode_dataset(dae_model, clean_images, labels, dataset)
     
-    sae_low_freq_encodings, _ = encode_dataset(sae_model, low_freq_images, labels, dataset)
-    dae_low_freq_encodings, _ = encode_dataset(dae_model, low_freq_images, labels, dataset)
+#     sae_low_freq_encodings, _ = encode_dataset(sae_model, low_freq_images, labels, dataset)
+#     dae_low_freq_encodings, _ = encode_dataset(dae_model, low_freq_images, labels, dataset)
     
-    sae_mid_freq_encodings, _ = encode_dataset(sae_model, mid_freq_images, labels, dataset)
-    dae_mid_freq_encodings, _ = encode_dataset(dae_model, mid_freq_images, labels, dataset)
+#     sae_mid_freq_encodings, _ = encode_dataset(sae_model, mid_freq_images, labels, dataset)
+#     dae_mid_freq_encodings, _ = encode_dataset(dae_model, mid_freq_images, labels, dataset)
     
-    sae_high_freq_encodings, _ = encode_dataset(sae_model, high_freq_images, labels, dataset)
-    dae_high_freq_encodings, _ = encode_dataset(dae_model, high_freq_images, labels, dataset)
+#     sae_high_freq_encodings, _ = encode_dataset(sae_model, high_freq_images, labels, dataset)
+#     dae_high_freq_encodings, _ = encode_dataset(dae_model, high_freq_images, labels, dataset)
         
-    # Clean encodings
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    sae_clean_umap = reducer.fit_transform(sae_clean_encodings)
+#     # Clean encodings
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     sae_clean_umap = reducer.fit_transform(sae_clean_encodings)
     
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    dae_clean_umap = reducer.fit_transform(dae_clean_encodings)
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     dae_clean_umap = reducer.fit_transform(dae_clean_encodings)
     
-    # Low frequency noise encodings
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    sae_low_freq_umap = reducer.fit_transform(sae_low_freq_encodings)
+#     # Low frequency noise encodings
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     sae_low_freq_umap = reducer.fit_transform(sae_low_freq_encodings)
     
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    dae_low_freq_umap = reducer.fit_transform(dae_low_freq_encodings)
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     dae_low_freq_umap = reducer.fit_transform(dae_low_freq_encodings)
     
-    # Mid frequency noise encodings
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    sae_mid_freq_umap = reducer.fit_transform(sae_mid_freq_encodings)
+#     # Mid frequency noise encodings
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     sae_mid_freq_umap = reducer.fit_transform(sae_mid_freq_encodings)
     
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    dae_mid_freq_umap = reducer.fit_transform(dae_mid_freq_encodings)
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     dae_mid_freq_umap = reducer.fit_transform(dae_mid_freq_encodings)
     
-    # High frequency noise encodings
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    sae_high_freq_umap = reducer.fit_transform(sae_high_freq_encodings)
+#     # High frequency noise encodings
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     sae_high_freq_umap = reducer.fit_transform(sae_high_freq_encodings)
     
-    reducer = umap.UMAP(n_components=2, random_state=42)
-    dae_high_freq_umap = reducer.fit_transform(dae_high_freq_encodings)
+#     reducer = umap.UMAP(n_components=2, random_state=42)
+#     dae_high_freq_umap = reducer.fit_transform(dae_high_freq_encodings)
     
-    plt.figure(figsize=(20, 10))
+#     plt.figure(figsize=(20, 10))
     
-    # SAE encodings
-    plt.subplot(2, 4, 1)
-    scatter = plt.scatter(sae_clean_umap[:, 0], sae_clean_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("SAE Clean Encodings")
+#     # SAE encodings
+#     plt.subplot(2, 4, 1)
+#     scatter = plt.scatter(sae_clean_umap[:, 0], sae_clean_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("SAE Clean Encodings")
     
-    plt.subplot(2, 4, 2)
-    scatter = plt.scatter(sae_low_freq_umap[:, 0], sae_low_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("SAE Low Frequency Noise")
+#     plt.subplot(2, 4, 2)
+#     scatter = plt.scatter(sae_low_freq_umap[:, 0], sae_low_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("SAE Low Frequency Noise")
     
-    plt.subplot(2, 4, 3)
-    scatter = plt.scatter(sae_mid_freq_umap[:, 0], sae_mid_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("SAE Medium Frequency Noise")
+#     plt.subplot(2, 4, 3)
+#     scatter = plt.scatter(sae_mid_freq_umap[:, 0], sae_mid_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("SAE Medium Frequency Noise")
     
-    plt.subplot(2, 4, 4)
-    scatter = plt.scatter(sae_high_freq_umap[:, 0], sae_high_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("SAE High Frequency Noise")
+#     plt.subplot(2, 4, 4)
+#     scatter = plt.scatter(sae_high_freq_umap[:, 0], sae_high_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("SAE High Frequency Noise")
     
-    # DAE encodings
-    plt.subplot(2, 4, 5)
-    scatter = plt.scatter(dae_clean_umap[:, 0], dae_clean_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("DAE Clean Encodings")
+#     # DAE encodings
+#     plt.subplot(2, 4, 5)
+#     scatter = plt.scatter(dae_clean_umap[:, 0], dae_clean_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("DAE Clean Encodings")
     
-    plt.subplot(2, 4, 6)
-    scatter = plt.scatter(dae_low_freq_umap[:, 0], dae_low_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("DAE Low Frequency Noise")
+#     plt.subplot(2, 4, 6)
+#     scatter = plt.scatter(dae_low_freq_umap[:, 0], dae_low_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("DAE Low Frequency Noise")
     
-    plt.subplot(2, 4, 7)
-    scatter = plt.scatter(dae_mid_freq_umap[:, 0], dae_mid_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("DAE Medium Frequency Noise")
+#     plt.subplot(2, 4, 7)
+#     scatter = plt.scatter(dae_mid_freq_umap[:, 0], dae_mid_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("DAE Medium Frequency Noise")
     
-    plt.subplot(2, 4, 8)
-    scatter = plt.scatter(dae_high_freq_umap[:, 0], dae_high_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
-    plt.colorbar(scatter)
-    plt.title("DAE High Frequency Noise")
+#     plt.subplot(2, 4, 8)
+#     scatter = plt.scatter(dae_high_freq_umap[:, 0], dae_high_freq_umap[:, 1], c=labels, cmap='Spectral', s=5)
+#     plt.colorbar(scatter)
+#     plt.title("DAE High Frequency Noise")
     
-    plt.suptitle(f"{dataset.upper()} Encodings UMAP Visualization", fontsize=16)
-    plt.tight_layout(rect=[0, 0, 1, 0.97])
-    plt.savefig(f"Results/figures/png/{dataset}_all_encodings_umap.png", dpi=300, bbox_inches='tight')
-    plt.savefig(f"Results/figures/svg/{dataset}_all_encodings_umap.svg", bbox_inches='tight')
-    plt.close()
+#     plt.suptitle(f"{dataset.upper()} Encodings UMAP Visualization", fontsize=16)
+#     plt.tight_layout(rect=[0, 0, 1, 0.97])
+#     plt.savefig(f"Results/figures/png/{dataset}_all_encodings_umap.png", dpi=300, bbox_inches='tight')
+#     plt.savefig(f"Results/figures/svg/{dataset}_all_encodings_umap.svg", bbox_inches='tight')
+#     plt.close()
 
 
 def run_frequency_classification_analysis(iteration, dataset="mnist", base_path="/home/david/", noise_scale=1.0):
@@ -356,6 +430,7 @@ def run_frequency_classification_analysis(iteration, dataset="mnist", base_path=
     results = evaluate_frequency_classification(sae, dae, dataset, noise_scale)
     
     return results
+
 
 def compute_average_frequency_classification(num_models, dataset="mnist", base_path="/home/david/", noise_scale=1.0):
     """
@@ -449,7 +524,9 @@ def compute_average_frequency_classification(num_models, dataset="mnist", base_p
         np.save(result_file, avg_results)
         np.save(std_file, std_results)
     
-    plot_frequency_classification_results(avg_results, dataset, std_results)
+    p_values = load_and_calculate_pvalues(dataset)
+    
+    plot_frequency_classification_results(avg_results, dataset, std_results, p_values)
     
     return avg_results, std_results
 
@@ -553,3 +630,5 @@ def run_all_frequency_analyses(num_models_mnist, num_models_cifar, base_path="/h
     print("Running frequency classification analysis for CIFAR...")
     compute_average_frequency_classification(num_models_cifar, "cifar", base_path, noise_scale)
     visualize_frequency_noise(1, "cifar", noise_scale)
+
+# compute_average_frequency_classification(1, 'cifar', base_path='/home/david/', noise_scale=1)

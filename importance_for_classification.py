@@ -185,6 +185,8 @@ def compute_neuron_importance(num_models, dataset="mnist", base_path="/home/davi
     else:
         all_sae_importance = []
         all_dae_importance = []
+        all_sae_group_importance = []
+        all_dae_group_importance = []
 
         images, labels = load_cifar_list() if dataset.lower() == "cifar" else load_mnist_list()
         
@@ -196,12 +198,17 @@ def compute_neuron_importance(num_models, dataset="mnist", base_path="/home/davi
                 
             all_sae_importance.append(sae_importance)
             all_dae_importance.append(dae_importance)
+            
+            # Calculate group importance for each model
+            if neuron_groups is not None:
+                sae_group_imp = get_neuron_group_importance(sae_importance, neuron_groups)
+                dae_group_imp = get_neuron_group_importance(dae_importance, neuron_groups)
+                all_sae_group_importance.append(sae_group_imp)
+                all_dae_group_importance.append(dae_group_imp)
         
-        # Compute averages
         avg_sae_importance = np.mean(all_sae_importance, axis=0)
         avg_dae_importance = np.mean(all_dae_importance, axis=0)
         
-        # Create average results dictionary
         avg_results = {
             'sae_importance': avg_sae_importance,
             'dae_importance': avg_dae_importance,
@@ -209,9 +216,87 @@ def compute_neuron_importance(num_models, dataset="mnist", base_path="/home/davi
             'num_models': num_models
         }
         
+        if neuron_groups is not None and len(all_sae_group_importance) > 0:
+            avg_results['all_sae_group_importance'] = all_sae_group_importance
+            avg_results['all_dae_group_importance'] = all_dae_group_importance
+        
         np.save(result_file, avg_results)
 
     return avg_results
+
+
+def plot_grouped_importance(sae_importance, dae_importance, neuron_groups, dataset="mnist", avg_results=None):
+    """
+    Plot neuron importance grouped by neuron groups, side by side for SAE and DAE with error bars.
+    
+    Args:
+        sae_importance: SAE neuron importance values
+        dae_importance: DAE neuron importance values
+        neuron_groups: List of indices defining the end of each group
+        dataset: Dataset name ('mnist' or 'cifar')
+        avg_results: Optional dictionary containing additional data for error bars
+    """
+    # Calculate group importance
+    sae_group_importance = get_neuron_group_importance(sae_importance, neuron_groups)
+    dae_group_importance = get_neuron_group_importance(dae_importance, neuron_groups)
+    
+    sae_group_error = np.zeros_like(sae_group_importance)
+    dae_group_error = np.zeros_like(dae_group_importance)
+    
+    # Compute std
+    if avg_results is not None and 'all_sae_group_importance' in avg_results:
+        all_sae_group = np.array(avg_results['all_sae_group_importance'])
+        all_dae_group = np.array(avg_results['all_dae_group_importance'])
+        num_models = len(all_sae_group)
+        
+        if num_models > 1:
+            sae_group_error = np.std(all_sae_group, axis=0)
+            dae_group_error = np.std(all_dae_group, axis=0)
+    
+    start_indices = [1] + [neuron_groups[i-1] + 1 for i in range(1, len(neuron_groups))]
+    x_labels = [f"{start}-{end}" for start, end in zip(start_indices, neuron_groups)]
+    
+    plt.rc('font', size=28)
+    x_indices = np.arange(len(neuron_groups))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), dpi=300)
+    
+    # Plot SAE
+    sae_bars = ax1.bar(x_indices, sae_group_importance, color='#1a7adb', 
+                       yerr=sae_group_error, capsize=5, ecolor='black')
+    ax1.set_xticks(x_indices)
+    ax1.set_xticklabels(x_labels)
+    ax1.set_ylabel('Neuron Classification Influence')
+    ax1.set_title('AE')
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    
+    # Plot DAE
+    dae_bars = ax2.bar(x_indices, dae_group_importance, color='#e82817',
+                       yerr=dae_group_error, capsize=5, ecolor='black')
+    ax2.set_xticks(x_indices)
+    ax2.set_xticklabels(x_labels)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax2.yaxis.set_visible(False)
+    ax2.set_ylabel('')
+    ax2.set_title('DevAE')
+    
+    max_val = max(
+        max(np.array(sae_group_importance) + np.array(sae_group_error)), 
+        max(np.array(dae_group_importance) + np.array(dae_group_error))
+    )
+    ax1.set_ylim(0, max_val * 1.1)
+    ax2.set_ylim(0, max_val * 1.1)
+    
+    fig.suptitle('Neuron Group Importance')
+    
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
+    
+    plt.savefig(f"Results/figures/png/{dataset}_grouped_neuron_importance", dpi=300, bbox_inches='tight')
+    plt.savefig(f"Results/figures/svg/{dataset}_grouped_neuron_importance", bbox_inches='tight')
+    plt.close()
 
 
 def run_classification_importance_analysis(num_models, base_path="/home/david/", dataset="mnist", size_ls=None):
@@ -227,11 +312,12 @@ def run_classification_importance_analysis(num_models, base_path="/home/david/",
 
     print(f"Running analysis for {dataset}...")
     neuron_groups = sorted(set(size_ls))
-    compute_neuron_importance(num_models, dataset, base_path, neuron_groups)
-    avg_results = np.load(f"Results/{dataset}_neuron_importance.npy", allow_pickle=True).item()
+    avg_results = compute_neuron_importance(num_models, dataset, base_path, neuron_groups)
+    
     plot_grouped_importance(
         avg_results['sae_importance'], 
         avg_results['dae_importance'], 
         avg_results['neuron_groups'], 
-        dataset
+        dataset,
+        avg_results
     )

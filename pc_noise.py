@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 from matplotlib.colors import BoundaryNorm, ListedColormap
 import seaborn as sns
 from tqdm import tqdm
@@ -335,7 +336,7 @@ def compute_pc_zeroing_analysis(num_models, manipulated_neurons, dataset="mnist"
 
 def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", method="noise"):
     """
-    Create heatmaps showing rankings of PC impact on neurons.
+    Create improved heatmaps showing rankings of PC impact on neurons.
     
     Args:
         results: Results dictionary
@@ -346,7 +347,6 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
     Returns:
         Tuple of SAE and DAE rankings
     """
-    # Sample to determine the number of neurons
     sample_data = next(iter(results.values()))[0]
     num_neurons = len(sample_data[0])
     
@@ -388,23 +388,16 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
         sae_rankings[:, neuron] = np.argsort(np.argsort(-sae_neuron_diffs)) + 1
         dae_rankings[:, neuron] = np.argsort(np.argsort(-dae_neuron_diffs)) + 1
     
-    pc_labels = [f"({r[0]+1}-{r[1]})" for r in manipulated_neurons]
+    pc_labels = [f"{r[0]+1}-{r[1]}" for r in manipulated_neurons]
     
     plt.rcParams.update({'font.size': 14})
     
-    max_neurons = len(manipulated_neurons)
-    mid_position = max_neurons // 2
-    xtick_positions = [0, mid_position, max_neurons - 1]
-    xtick_labels = [1, mid_position + 1, max_neurons]
-    num_ranks = len(manipulated_neurons)
-
     if dataset.lower() == "mnist":
-        fig_size = (5, 3)
-        linewidths = 0.5
+        fig_size = (12, 4)
     else:
-        fig_size = (5, 3)
-        linewidths = 0.1
+        fig_size = (12, 4)
     
+    num_ranks = len(manipulated_neurons)
     blues = plt.cm.Blues_r(np.linspace(0, 1, num_ranks + 1))
     discrete_blues = ListedColormap(blues)
     reds = plt.cm.Reds_r(np.linspace(0, 1, num_ranks + 1))
@@ -413,58 +406,74 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
     bounds = [i + 0.5 for i in range(num_ranks + 1)]
     norm = BoundaryNorm(bounds, num_ranks)
     
-    method_str = "PC Noise Impact" if method == "noise" else "PC Zeroing Impact"
+    neuron_group_start_indices = [pair[0]+1 for pair in manipulated_neurons]
+    
+    fig = plt.figure(figsize=fig_size)
+    gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1], wspace=0.05)
     
     # SAE Heatmap
-    plt.figure(figsize=fig_size)
+    ax1 = plt.subplot(gs[0])
     
-    ax = sns.heatmap(sae_rankings, annot=False, cmap=discrete_blues, 
-                cbar=True, square=(dataset.lower() == "mnist"), linewidths=linewidths,
+    sns.heatmap(sae_rankings, annot=False, cmap=discrete_blues, 
+                cbar=True, square=False, linewidths=0,
                 norm=norm,
                 xticklabels=range(1, num_neurons+1),
-                yticklabels=pc_labels)
+                yticklabels=pc_labels, ax=ax1)
     
-    ax.set_xticks([p + 0.5 for p in xtick_positions])
-    ax.set_xticklabels(xtick_labels)
+    # Add gray lines at neuron group boundaries
+    for i, start_idx in enumerate(neuron_group_start_indices):
+        if i > 0:
+            ax1.axvline(x=start_idx-1, color='gray', linewidth=3.0)
     
-    cbar = ax.collections[0].colorbar
-    cbar.set_ticks(list(range(1, num_ranks + 1)))
-    cbar.set_ticklabels(list(range(1, num_ranks + 1)))
-    cbar.minorticks_off()
-    cbar.ax.invert_yaxis()
+    ax1.set_xticks([idx-1+0.5 for idx in neuron_group_start_indices])
+    ax1.set_xticklabels(neuron_group_start_indices)
     
-    plt.title(f"{dataset.upper()} SAE: {method_str} Rankings", fontsize=16)
-    plt.xlabel("Neuron Index", fontsize=14)
-    manipulation_type = "Manipulated" if method == "noise" else "Kept"
-    plt.ylabel(f"{manipulation_type} PC Range", fontsize=14)
-    plt.tight_layout()
-    plt.savefig(f"Results/figures/png/{dataset}_pc_{method}_heatmap_sae_rankings.png", dpi=300, bbox_inches='tight')
-    plt.close()
+    # Colorbar
+    cbar1 = ax1.collections[0].colorbar
+    cbar1.set_ticks(list(range(1, num_ranks + 1)))
+    cbar1.set_ticklabels(list(range(1, num_ranks + 1)))
+    cbar1.set_label('Ranking')
+    cbar1.minorticks_off()
+    cbar1.ax.invert_yaxis()
+    
+    ax1.set_title("AE", fontsize=16)
+    ax1.set_xlabel("Neuron Index", fontsize=14)
+    ax1.set_ylabel("PC Range", fontsize=14)
     
     # DAE Heatmap
-    plt.figure(figsize=fig_size)
+    ax2 = plt.subplot(gs[1])
     
-    ax = sns.heatmap(dae_rankings, annot=False, cmap=discrete_reds, 
-                cbar=True, square=(dataset.lower() == "mnist"), linewidths=linewidths,
+    sns.heatmap(dae_rankings, annot=False, cmap=discrete_reds, 
+                cbar=True, square=False, linewidths=0,
                 norm=norm,
                 xticklabels=range(1, num_neurons+1),
-                yticklabels=pc_labels)
+                yticklabels=[], ax=ax2)
     
-    ax.set_xticks([p + 0.5 for p in xtick_positions])
-    ax.set_xticklabels(xtick_labels)
+    # Add gray lines at neuron group boundaries
+    for i, start_idx in enumerate(neuron_group_start_indices):
+        if i > 0:
+            ax2.axvline(x=start_idx-1, color='gray', linewidth=3.0)
     
-    cbar = ax.collections[0].colorbar
-    cbar.set_ticks(list(range(1, num_ranks + 1)))
-    cbar.set_ticklabels(list(range(1, num_ranks + 1)))
-    cbar.minorticks_off()
-    cbar.ax.invert_yaxis()
+    ax2.set_xticks([idx-1+0.5 for idx in neuron_group_start_indices])
+    ax2.set_xticklabels(neuron_group_start_indices)
     
-    plt.title(f"{dataset.upper()} DAE: {method_str} Rankings", fontsize=16)
-    plt.xlabel("Neuron Index", fontsize=14)
-    plt.ylabel("Manipulated PC Range", fontsize=14)
+    # Colorbar
+    cbar2 = ax2.collections[0].colorbar
+    cbar2.set_ticks(list(range(1, num_ranks + 1)))
+    cbar2.set_ticklabels(list(range(1, num_ranks + 1)))
+    cbar2.set_label('Ranking')
+    cbar2.minorticks_off()
+    cbar2.ax.invert_yaxis()
+    
+    ax2.set_title("Dev-AE", fontsize=16)
+    ax2.set_xlabel("Neuron Index", fontsize=14)
+
+    fig.suptitle("PC Noise Impact Rankings", fontsize=18, y=1.05)
+    
     plt.tight_layout()
-    plt.savefig(f"Results/figures/png/{dataset}_pc_{method}_heatmap_dae_rankings.png", dpi=300, bbox_inches='tight')
-    plt.savefig(f"Results/figures/svg/{dataset}_pc_{method}_heatmap_dae_rankings.svg", bbox_inches='tight')
+    
+    fig.savefig(f"Results/figures/png/{dataset}_pc_{method}_combined_rankings.png", dpi=300, bbox_inches='tight')
+    fig.savefig(f"Results/figures/svg/{dataset}_pc_{method}_combined_rankings.svg", bbox_inches='tight')
     plt.close()
     
     return sae_rankings, dae_rankings
@@ -552,3 +561,6 @@ def run_all_pc_analyses(num_models, dataset, base_path, manipulated_neurons):
     
     print(f"Running PC zeroing analysis for {dataset}...")
     run_pc_zeroing_analysis(num_models, dataset, base_path, manipulated_neurons)
+
+# run_all_pc_analyses(40, "mnist", '/home/david/', manipulated_neurons=[(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)])
+# run_all_pc_analyses(1, "cifar", '/home/david/', manipulated_neurons=[(0, 6), (6, 10), (10, 16), (16, 28), (28, 48), (48, 90), (90, 128)])
