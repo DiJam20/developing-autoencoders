@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -30,8 +29,8 @@ def create_figure_4(dataset='cifar'):
     ax_left = plt.subplot(gs[0])
     ax_right = plt.subplot(gs[1])
     
-    plot_activation_per_neuron(ax_left, dataset)
-    plot_zeros_per_neuron(ax_right, dataset)
+    plot_zeros_per_neuron(ax_left, dataset)
+    plot_activation_per_neuron(ax_right, dataset)
     
     # Add figure labels
     ax_left.text(-0.15, 1.1, 'A', transform=ax_left.transAxes, 
