@@ -97,11 +97,13 @@ def rgb_to_grayscale(images):
     return np.squeeze(grayscale, axis=3)
 
 
-def load_rfs(save_path_sae: str, save_path_dae:str, num_models: int, epoch: int) -> tuple:
+def compute_power_spectra(save_path_sae: str, save_path_dae:str, num_models: int, epoch: int) -> tuple:
     """
     Load the receptive fields of the models and compute the power spectrum of each RF.
     
     Args:
+        save_path_sae: Path to SAE RF data
+        save_path_dae: Path to DAE RF data
         num_models: number of models
         epoch: epoch number
         
@@ -118,7 +120,7 @@ def load_rfs(save_path_sae: str, save_path_dae:str, num_models: int, epoch: int)
     MIN_WIDTH = 28
     MIN_HEIGHT = 28
 
-    if len(sae_rfs.shape) == 5:
+    if len(sae_rfs.shape) == 6:
         sae_rfs = rgb_to_grayscale(sae_rfs)
         dae_rfs = rgb_to_grayscale(dae_rfs)
         MIN_WIDTH = 32
@@ -173,7 +175,7 @@ def group_power_spectra(power_spectra, neuron_groups):
     return np.array(grouped_spectra), group_labels
 
 
-def plot_power_spectra_subplot(ax, frequency_data, title, group_labels=None, ylim_top=30000):
+def plot_power_spectra_subplot(ax, frequency_data, title, group_labels=None, ylim_top=30000, show_y_label=True):
     """
     Plot power spectra for groups of neurons.
     
@@ -183,44 +185,33 @@ def plot_power_spectra_subplot(ax, frequency_data, title, group_labels=None, yli
         title: Plot title
         group_labels: Labels for each group
         ylim_top: Upper limit for y-axis
+        show_y_label: Whether to show y label and ticks
     """
     colors = plt.cm.cool(np.linspace(0, 1, frequency_data.shape[0]))
-    discrete_cmap = mcolors.ListedColormap(colors)
     
     for idx, freq in enumerate(frequency_data):
         label = f'Neurons {group_labels[idx]}' if group_labels else f'RF{idx + 1}'
-        ax.plot(freq, color=colors[idx], label=label)
+        ax.plot(freq, color=colors[idx], label=label, linewidth=2)
     
-    ax.set(xlabel='Frequency', 
-           ylabel='Power',
-           xlim=(0, 10),
-           ylim=(0, ylim_top))
+    # Set x-axis ticks and labels
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, ylim_top)
+    ax.set_xticks([0, 5, 10])
+    ax.set_xticklabels(['0', '5', '10'])
+    ax.set_xlabel('Frequency')
+    
+    # Show ylabel and ticks on left plot only
+    if show_y_label:
+        ax.set_ylabel('Power')
+    else:
+        ax.set_yticks([])
+        ax.set_ylabel('')
     
     ax.tick_params(axis='both', which='major', labelsize=16)
     ax.set_title(title)
-    
-    if frequency_data.shape[0] <= 10:
-        ax.legend(fontsize=10, loc='upper right')
-    
-    # Only add colorbar for non-grouped version
-    if not group_labels:
-        bounds = np.arange(-0.5, frequency_data.shape[0] + 0.5, 1)
-        norm = mcolors.BoundaryNorm(bounds, discrete_cmap.N)
-        sm = plt.cm.ScalarMappable(cmap=discrete_cmap, norm=norm)
-        sm.set_array([])
-
-        num_ticks = 3
-        tick_positions = np.linspace(0, frequency_data.shape[0]-1, num_ticks, dtype=int)
-        tick_labels = [1, frequency_data.shape[0] // 2, frequency_data.shape[0]]
-
-        cbar = plt.colorbar(sm, ax=ax, ticks=tick_positions)
-        cbar.set_label('Neuron Index', fontsize=16)
-        cbar.ax.tick_params(labelsize=16)
-        cbar.set_ticklabels(tick_labels)
-        cbar.minorticks_off()
 
 
-def save_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups=None):
+def plot_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups=None):
     """
     Plot the power spectra of the receptive fields of the models.
 
@@ -235,6 +226,7 @@ def save_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups=None)
     """
     plt.rcParams['font.size'] = 16
     fig, axs = plt.subplots(1, 2, figsize=(12, 5), dpi=300)
+    fig.suptitle('Power Spectra of Receptive Fields', fontsize=20)
     
     # Average across models
     sae_mean = np.mean(sae_power_spectra, axis=0)
@@ -245,20 +237,51 @@ def save_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups=None)
         sae_grouped, group_labels = group_power_spectra(sae_mean, neuron_groups)
         dae_grouped, _ = group_power_spectra(dae_mean, neuron_groups)
         
-        plot_power_spectra_subplot(axs[0], sae_grouped, 'SAE RF Power Spectrum', group_labels)
-        plot_power_spectra_subplot(axs[1], dae_grouped, 'DAE RF Power Spectrum', group_labels)
+        plot_power_spectra_subplot(axs[0], sae_grouped, 'AE', group_labels, show_y_label=True)
+        plot_power_spectra_subplot(axs[1], dae_grouped, 'Dev-AE', group_labels, show_y_label=False)
+        
+        n_groups = len(group_labels)
+        cbar_label = 'Neuron Groups'
+        
+        colors = plt.cm.cool(np.linspace(0, 1, n_groups))[::-1]
     else:
         # Plot one line per neuron
-        plot_power_spectra_subplot(axs[0], sae_mean, 'SAE RF Power Spectrum')
-        plot_power_spectra_subplot(axs[1], dae_mean, 'DAE RF Power Spectrum')
-
+        plot_power_spectra_subplot(axs[0], sae_mean, 'AE', show_y_label=True)
+        plot_power_spectra_subplot(axs[1], dae_mean, 'Dev-AE', show_y_label=False)
+        
+        n_groups = sae_mean.shape[0]
+        cbar_label = 'Neuron Index'
+        
+        colors = plt.cm.cool(np.linspace(0, 1, n_groups))
+    
+    discrete_cmap = mcolors.ListedColormap(colors)
+    
+    bounds = np.arange(-0.5, n_groups + 0.5, 1)
+    norm = mcolors.BoundaryNorm(bounds, discrete_cmap.N)
+    sm = plt.cm.ScalarMappable(cmap=discrete_cmap, norm=norm)
+    sm.set_array([])
+    
+    # Use all neuron groups for the colorbar
+    tick_positions = np.arange(n_groups)
+    if neuron_groups:
+        tick_labels = group_labels[::-1]
+    else:
+        tick_labels = [str(i+1) for i in range(n_groups)]
+    
     plt.tight_layout()
+    
+    cbar = fig.colorbar(sm, ax=axs, ticks=tick_positions)
+    cbar.set_label(cbar_label, fontsize=16)
+    cbar.ax.tick_params(labelsize=16)
+    cbar.set_ticklabels(tick_labels)
+    cbar.minorticks_off()
+    
     plt.savefig('Results/figures/png/combined_power_spectrum.png', bbox_inches='tight', dpi=300)
     plt.savefig('Results/figures/svg/combined_power_spectrum.svg', bbox_inches='tight')
     plt.close()
 
 
-def plot_power_spectra(save_path_sae, save_path_dae, num_models, epoch, neuron_groups=None):
+def analyze_power_spectra(save_path_sae, save_path_dae, num_models, epoch, neuron_groups=None):
     """
     Load RFs, compute power spectra, and plot them with optional neuron grouping.
     
@@ -270,5 +293,5 @@ def plot_power_spectra(save_path_sae, save_path_dae, num_models, epoch, neuron_g
         neuron_groups: List of integers representing the end index of each group
                       e.g., [6, 10, 16, 28, 90, 128] means groups are 1-6, 7-10, etc.
     """
-    sae_power_spectra, dae_power_spectra = load_rfs(save_path_sae, save_path_dae, num_models, epoch)
-    save_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups)
+    sae_power_spectra, dae_power_spectra = compute_power_spectra(save_path_sae, save_path_dae, num_models, epoch)
+    plot_power_spectra(sae_power_spectra, dae_power_spectra, neuron_groups)
