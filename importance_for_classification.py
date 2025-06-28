@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from sklearn.linear_model import LogisticRegression
 from tqdm import tqdm
 import torch
@@ -8,6 +9,14 @@ import torch
 from autoencoder import *
 from model_utils import *
 from solver import *
+
+mpl.rcParams.update({
+    'text.usetex': True,
+    'font.family': 'serif',
+    'font.serif': ['Computer Modern'],
+    'font.size': 11,
+    'axes.titlesize': 11
+})
 
 
 def encode_dataset(model, dataset_images, dataset="mnist"):
@@ -256,31 +265,35 @@ def plot_grouped_importance(sae_importance, dae_importance, neuron_groups, datas
     start_indices = [1] + [neuron_groups[i-1] + 1 for i in range(1, len(neuron_groups))]
     x_labels = [f"{start}-{end}" for start, end in zip(start_indices, neuron_groups)]
     
-    plt.rc('font', size=28)
+    # plt.rc('font', size=28)
     x_indices = np.arange(len(neuron_groups))
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), dpi=300)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.268*0.49, 2.6), dpi=300)
     
     # Plot SAE
     sae_bars = ax1.bar(x_indices, sae_group_importance, color='#1a7adb', 
-                       yerr=sae_group_error, capsize=5, ecolor='black')
+                       yerr=sae_group_error, capsize=4, ecolor='black')
     ax1.set_xticks(x_indices)
-    ax1.set_xticklabels(x_labels)
-    ax1.set_ylabel('Neuron Classification Influence')
-    ax1.set_title('AE')
+    ax1.set_xticklabels(x_labels, rotation=90)
+    # ax1.set_xlabel('Neuron Group')
+    ax1.set_ylabel('Classification Contribution')
+    # ax1.set_title('AE')
     ax1.spines['top'].set_visible(False)
     ax1.spines['right'].set_visible(False)
     
     # Plot DAE
     dae_bars = ax2.bar(x_indices, dae_group_importance, color='#e82817',
-                       yerr=dae_group_error, capsize=5, ecolor='black')
+                       yerr=dae_group_error, capsize=4, ecolor='black')
     ax2.set_xticks(x_indices)
-    ax2.set_xticklabels(x_labels)
+    ax2.set_xticklabels(x_labels, rotation=90)
+    # ax2.set_xlabel('Neuron Group')
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
     ax2.spines['left'].set_visible(False)
     ax2.yaxis.set_visible(False)
     ax2.set_ylabel('')
-    ax2.set_title('DevAE')
+    # ax2.set_title('DevAE')
+
+    ax1.legend([sae_bars, dae_bars], ['AE', 'Dev-AE'], loc='upper left')
     
     max_val = max(
         max(np.array(sae_group_importance) + np.array(sae_group_error)), 
@@ -289,13 +302,13 @@ def plot_grouped_importance(sae_importance, dae_importance, neuron_groups, datas
     ax1.set_ylim(0, max_val * 1.1)
     ax2.set_ylim(0, max_val * 1.1)
     
-    fig.suptitle('Neuron Group Importance')
-    
+    fig.supxlabel('Neuron Group', x=0.57, y=0.1, fontsize=11)
     plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
+    plt.subplots_adjust(wspace=0.1)
     
-    plt.savefig(f"Results/figures/png/{dataset}_grouped_neuron_importance", dpi=300, bbox_inches='tight')
-    plt.savefig(f"Results/figures/svg/{dataset}_grouped_neuron_importance", bbox_inches='tight')
+    plt.savefig(f"Results/figures/png/{dataset}_grouped_neuron_importance.png", dpi=300)
+    plt.savefig(f"Results/figures/svg/{dataset}_grouped_neuron_importance.svg")
+    plt.savefig(f"Results/figures/pdf/{dataset}_grouped_neuron_importance.pdf")
     plt.close()
 
 
@@ -321,3 +334,28 @@ def run_classification_importance_analysis(num_models, base_path="/home/david/",
         dataset,
         avg_results
     )
+
+if __name__ == "__main__":
+    mnist_size_ls = [4, 4, 4, 4, 4, 10,
+        10, 10, 10, 10, 16, 16,
+        16, 16, 16, 16, 16, 24,
+        24, 24, 24, 24, 24, 24, 
+        32, 32, 32, 32, 32, 32,
+        32, 32, 32, 32, 32, 32, 
+        32, 32, 32, 32, 32, 32, 
+        32, 32, 32, 32, 32, 32, 
+        32, 32, 32, 32, 32, 32,
+        32, 32, 32, 32, 32, 32,]
+    
+    cifar_size_ls = [6,   6,   6,   6,   6,   6,    # 6
+					10,  10,  10,  10,  10,  10,    # 6
+					16,  16,  16,  16,  16,  16,    # 6
+					28,  28,  28,  28,  28,  28,    # 6
+					48,  48,  48,  48,  48,  48,  48,  48, 48, # 9
+					90,  90,  90,  90,  90,  90,  90,  90,  90,  90, #10
+					128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
+					128, 128, 128, 128, 128, 128, 128 # 17
+					]
+
+    run_classification_importance_analysis(40, base_path="/home/david/", dataset="mnist", size_ls=mnist_size_ls)
+    run_classification_importance_analysis(10, base_path="/home/david/", dataset="cifar", size_ls=cifar_size_ls)

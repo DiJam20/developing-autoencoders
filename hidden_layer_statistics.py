@@ -200,13 +200,13 @@ def compute_activation_for_single_model(model_idx: int, model_type: str,
     results.fill(np.nan)
     
     if dataset == 'mnist':
-        model = load_model(f'{base_path}mnist_model/{model_type}/{model_idx}', model_type, epoch)
+        model = load_model(f'{base_path}mnist_models/{model_type}/{model_idx}', model_type, epoch)
     elif dataset == 'cifar':
         if model_type == 'sae':
-            model = load_conv_model(f'{base_path}cifar_model/{model_type}/{model_idx}', 
+            model = load_conv_model(f'{base_path}cifar_models/{model_type}/{model_idx}', 
                                   model_type, epoch)
         else:
-            model = load_conv_model(f'{base_path}cifar_model/{model_type}/{model_idx}', 
+            model = load_conv_model(f'{base_path}cifar_models/{model_type}/{model_idx}', 
                                   model_type, epoch, [128] * (epoch + 1))
     
     layer_results = evaluate_model_activations(test_images, model, dataset)
@@ -262,7 +262,7 @@ def compute_activation_over_epochs_for_single_model(model_idx: int, model_type: 
     results.fill(np.nan)
     
     for epoch in tqdm(range(num_epochs), desc=f"Model {model_idx} epochs", leave=False):
-        ae = load_model(f'{base_path}mnist_model/{model_type}/{model_idx}', model_type, epoch)
+        ae = load_model(f'{base_path}mnist_models/{model_type}/{model_idx}', model_type, epoch)
         layer_results = evaluate_model_activations(test_images, ae)
         
         # Store results for each layer
@@ -320,7 +320,7 @@ def compute_neuron_activations(model_type, dataset, num_models=40, num_epochs=10
     
     for model_idx in tqdm(range(num_models), desc="Processing models"):
         model_results = compute_activation_for_single_model(
-            model_idx, model_type, test_images, dataset, num_epochs, epoch
+            model_idx, model_type, test_images, dataset, epoch, base_path="/home/david/"
         )
         
         all_results[model_idx] = model_results

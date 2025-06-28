@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
@@ -12,6 +13,13 @@ from scipy import stats
 from autoencoder import *
 from model_utils import *
 from solver import *
+
+mpl.rcParams.update({
+    'text.usetex': True,
+    'font.family': 'serif',
+    'font.serif': ['Computer Modern'],
+    'font.size': 11
+})
 
 
 def encode_dataset(model, dataset_images, dataset="mnist"):
@@ -33,7 +41,8 @@ def encode_dataset(model, dataset_images, dataset="mnist"):
     
     with torch.no_grad():
         if dataset.lower() == "mnist":
-            encoded = model.encode(dataset_images)
+            print(dataset_images.shape)
+            encoded = model.encode(dataset_images.reshape(dataset_images.size(0), -1))
         else:
             encoded = model.encode(dataset_images)
     
@@ -228,7 +237,7 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
         std_devs: Dictionary with standard deviations for error bars
         p_values: Dictionary with p-values for significance testing
     """    
-    plt.figure(figsize=(14, 8))
+    plt.figure(figsize=(6.266 * 0.5, 2.5))
     
     sae_accs = [
         results['sae_clean_acc'],
@@ -260,16 +269,16 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
     width = 0.35
     
     # Create the bar plots
-    sae_bars = plt.bar(x - width/2, sae_accs, width, label='SAE', color='#1a7adb', 
+    sae_bars = plt.bar(x - width/2, sae_accs, width, label='AE', color='#1a7adb', 
                       yerr=sae_errors, capsize=5)
-    dae_bars = plt.bar(x + width/2, dae_accs, width, label='DAE', color='#e82817', 
+    dae_bars = plt.bar(x + width/2, dae_accs, width, label='Dev-AE', color='#e82817', 
                       yerr=dae_errors, capsize=5)
     
-    plt.xlabel('Noise Type')
+    plt.xlabel('Frequency Noise Type')
     plt.ylabel('Classification Accuracy')
-    plt.title(f'Classification of Frequency Noise Types {dataset.upper()}')
-    plt.xticks(x, ['Clean', 'Low Frequency\n(0-3)', 'Medium Frequency\n(4-7)', 'High Frequency\n(8-16)'])
-    plt.legend(loc='upper right')
+    # plt.title(f'Classification of Frequency Noise Types {dataset.upper()}')
+    plt.xticks(x, ['Clean', 'Low', 'Medium', 'High'])
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.25))
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
     
@@ -286,12 +295,13 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
             y_pos = bar_height + max(sae_errors[i], dae_errors[i]) + 0.01
             
             if p < 0.05:
-                plt.text(x[i], y_pos, '*', ha='center', va='bottom', fontsize=16)
+                plt.text(x[i], y_pos, '*', ha='center', va='bottom', fontsize=11)
             else:
-                plt.text(x[i], y_pos, 'ns', ha='center', va='bottom', fontsize=10)
+                plt.text(x[i], y_pos, 'ns', ha='center', va='bottom', fontsize=11)
     
     plt.savefig(f"Results/figures/png/{dataset}_all_freq_classification.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/{dataset}_all_freq_classification.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/pdf/{dataset}_all_freq_classification.pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -529,7 +539,7 @@ def compute_average_frequency_classification(num_models, dataset="mnist", base_p
     if create_plots:
         plot_frequency_classification_results(avg_results, dataset, std_results, p_values)
     
-    return avg_results, std_results
+    return avg_results
 
 
 def visualize_frequency_noise(image_idx, dataset="mnist", noise_scale=1, save_path="Results/figures/"):
@@ -575,8 +585,8 @@ def visualize_frequency_noise(image_idx, dataset="mnist", noise_scale=1, save_pa
     mid_freq_mse = mean_squared_error(original_image.flatten(), mid_freq_image.flatten())
     high_freq_mse = mean_squared_error(original_image.flatten(), high_freq_image.flatten())
 
-    plt.rcParams.update({'font.size': 16})
-    fig, axes = plt.subplots(1, 4, figsize=(16, 5))
+    # plt.rcParams.update({'font.size': 16})
+    fig, axes = plt.subplots(1, 4, figsize=(6.268*0.9, 1.5))
     
     def plot_image(ax, img, title, mse=0, noise_scale=0):
         if dataset.lower() == "mnist":
@@ -584,34 +594,36 @@ def visualize_frequency_noise(image_idx, dataset="mnist", noise_scale=1, save_pa
         else:
             ax.imshow(img, cmap='gray')
 
-        ax.set_title(title)
+        ax.set_title(title, fontsize=11)
         
-        # Add MSE loss label
-        ax.text(0.5, -0.1, 
-                f"MSE Loss: {mse:.4f}", 
-                horizontalalignment='center', 
-                transform=ax.transAxes
-                )
-    
-        # Add noise scale label
-        ax.text(0.5, -0.2, 
-                f"Noise Scale: {noise_scale:.2f}",
-                horizontalalignment='center',
-                transform=ax.transAxes
-                )
+        if mse != 0:
+            # Add MSE loss label
+            ax.text(0.5, -0.2, 
+                    f"MSE Loss: {mse:.1f}", 
+                    horizontalalignment='center', 
+                    transform=ax.transAxes
+                    )
+        
+            # Add noise scale label
+            ax.text(0.5, -0.4, 
+                    f"Noise Scale: {noise_scale:.1f}",
+                    horizontalalignment='center',
+                    transform=ax.transAxes
+                    )
         
         ax.axis('off')
     
     plot_image(axes[0], original_image, f"Original")
-    plot_image(axes[1], low_freq_image, f"Low Frequency Noise", low_freq_mse, low_noise_scale)
-    plot_image(axes[2], mid_freq_image, f"Medium Frequency Noise", mid_freq_mse, mid_noise_scale)
-    plot_image(axes[3], high_freq_image, f"High Frequency Noise", high_freq_mse, high_noise_scale)
+    plot_image(axes[1], low_freq_image, f"Low Frequency", low_freq_mse, low_noise_scale)
+    plot_image(axes[2], mid_freq_image, f"Medium Frequency", mid_freq_mse, mid_noise_scale)
+    plot_image(axes[3], high_freq_image, f"High Frequency", high_freq_mse, high_noise_scale)
     
-    plt.suptitle(f"Image with Different Frequency Noise Types", fontsize=24, y=1.05)
+    # plt.suptitle(f"Image with Different Frequency Noise Types", fontsize=24, y=1.05)
     plt.tight_layout()
     
     plt.savefig(f"{save_path}png/{dataset}_frequency_noise_sample_gray.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"{save_path}svg/{dataset}_frequency_noise_sample_gray.svg", bbox_inches='tight')
+    plt.savefig(f"{save_path}pdf/{dataset}_frequency_noise_sample_gray.pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -633,3 +645,15 @@ def run_all_frequency_analyses(num_models_mnist, num_models_cifar, base_path="/h
     visualize_frequency_noise(1, "cifar", noise_scale)
 
 # compute_average_frequency_classification(1, 'cifar', base_path='/home/david/', noise_scale=1)
+
+if __name__ == "__main__":
+    num_models_mnist = 40
+    num_models_cifar = 10
+    base_path = "/home/david/"
+    noise_scale = 1.0
+
+    # compute_average_frequency_classification(num_models_mnist, "mnist", base_path, noise_scale, create_plots=True)
+    # compute_average_frequency_classification(num_models_cifar, "cifar", base_path, noise_scale, create_plots=True)
+
+    visualize_frequency_noise(1, "mnist", noise_scale)
+    visualize_frequency_noise(1, "cifar", noise_scale)

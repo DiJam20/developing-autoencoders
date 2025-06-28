@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import matplotlib.gridspec as gridspec
 from matplotlib.colors import BoundaryNorm, ListedColormap
 import seaborn as sns
@@ -11,6 +12,13 @@ import torch
 from autoencoder import *
 from model_utils import *
 from solver import *
+
+mpl.rcParams.update({
+    'text.usetex': True,
+    'font.family': 'serif',
+    'font.serif': ['Computer Modern'],
+    'font.size': 11
+})
 
 
 def add_noise_and_reconstruct(test_images, noise_scale, dataset="mnist", n_components=None, start_noise_idx=0, end_noise_idx=4):
@@ -170,7 +178,7 @@ def plot_neuron_comparison(results, manipulated_neurons, savepath, dataset="mnis
         dataset: Dataset ('mnist' or 'cifar')
         method: Method used ('noise' or 'zeroing')
     """
-    plt.rcParams.update({'font.size': 16})
+    # plt.rcParams.update({'font.size': 16})
     
     plt.figure(figsize=(12, 8))
     
@@ -390,26 +398,25 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
     
     pc_labels = [f"{r[0]+1}-{r[1]}" for r in manipulated_neurons]
     
-    plt.rcParams.update({'font.size': 14})
-    
-    if dataset.lower() == "mnist":
-        fig_size = (12, 4)
-    else:
-        fig_size = (12, 4)
+    # plt.rcParams.update({'font.size': 14})
     
     num_ranks = len(manipulated_neurons)
-    blues = plt.cm.Blues_r(np.linspace(0, 1, num_ranks + 1))
+    blues = plt.cm.get_cmap('Blues_r')(np.linspace(0, 1, num_ranks + 1))
     discrete_blues = ListedColormap(blues)
-    reds = plt.cm.Reds_r(np.linspace(0, 1, num_ranks + 1))
+    reds = plt.cm.get_cmap('Reds_r')(np.linspace(0, 1, num_ranks + 1))
     discrete_reds = ListedColormap(reds)
     
     bounds = [i + 0.5 for i in range(num_ranks + 1)]
     norm = BoundaryNorm(bounds, num_ranks)
     
     neuron_group_start_indices = [pair[0]+1 for pair in manipulated_neurons]
+
+    display_indices = [idx for idx in neuron_group_start_indices if idx != 7 and idx != 17]
     
-    fig = plt.figure(figsize=fig_size)
-    gs = gridspec.GridSpec(1, 2, width_ratios=[1, 1], wspace=0.05)
+    fig = plt.figure(figsize=(6.266, 2), dpi=300)
+    gs = gridspec.GridSpec(1, 2, wspace=0.2)
+
+    fig.subplots_adjust(bottom=0.22)
     
     # SAE Heatmap
     ax1 = plt.subplot(gs[0])
@@ -423,22 +430,23 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
     # Add gray lines at neuron group boundaries
     for i, start_idx in enumerate(neuron_group_start_indices):
         if i > 0:
-            ax1.axvline(x=start_idx-1, color='gray', linewidth=3.0)
+            ax1.axvline(x=start_idx-1, color='gray', linewidth=2)
     
-    ax1.set_xticks([idx-1+0.5 for idx in neuron_group_start_indices])
-    ax1.set_xticklabels(neuron_group_start_indices)
+    ax1.set_xticks([idx-1+0.5 for idx in display_indices])
+    ax1.set_xticklabels(display_indices)
     
     # Colorbar
     cbar1 = ax1.collections[0].colorbar
     cbar1.set_ticks(list(range(1, num_ranks + 1)))
     cbar1.set_ticklabels(list(range(1, num_ranks + 1)))
-    cbar1.set_label('Ranking')
     cbar1.minorticks_off()
     cbar1.ax.invert_yaxis()
+    cbar1.outline.set_linewidth(0.7)
+    cbar1.outline.set_edgecolor('black')
     
-    ax1.set_title("AE", fontsize=16)
-    ax1.set_xlabel("Neuron Index", fontsize=14)
-    ax1.set_ylabel("PC Range", fontsize=14)
+    ax1.set_title("AE", fontsize=11)
+    ax1.set_xlabel("Neuron Index")
+    ax1.set_ylabel("PC Range")
     
     # DAE Heatmap
     ax2 = plt.subplot(gs[1])
@@ -452,10 +460,10 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
     # Add gray lines at neuron group boundaries
     for i, start_idx in enumerate(neuron_group_start_indices):
         if i > 0:
-            ax2.axvline(x=start_idx-1, color='gray', linewidth=3.0)
+            ax2.axvline(x=start_idx-1, color='gray', linewidth=2.0)
     
-    ax2.set_xticks([idx-1+0.5 for idx in neuron_group_start_indices])
-    ax2.set_xticklabels(neuron_group_start_indices)
+    ax2.set_xticks([idx-1+0.5 for idx in display_indices])
+    ax2.set_xticklabels(display_indices)
     
     # Colorbar
     cbar2 = ax2.collections[0].colorbar
@@ -464,16 +472,20 @@ def create_ranking_heatmaps(results, manipulated_neurons, dataset="mnist", metho
     cbar2.set_label('Ranking')
     cbar2.minorticks_off()
     cbar2.ax.invert_yaxis()
+    cbar2.outline.set_linewidth(0.7)
+    cbar2.outline.set_edgecolor('black')
     
-    ax2.set_title("Dev-AE", fontsize=16)
-    ax2.set_xlabel("Neuron Index", fontsize=14)
+    ax2.set_title("Dev-AE", fontsize=11)
+    ax2.set_xlabel("Neuron Index")
 
-    fig.suptitle("PC Noise Impact Rankings", fontsize=18, y=1.05)
+    # fig.suptitle("PC Noise Impact Rankings", fontsize=18, y=1.05)
     
-    plt.tight_layout()
+    # plt.tight_layout()
     
-    fig.savefig(f"Results/figures/png/{dataset}_pc_{method}_combined_rankings.png", dpi=300, bbox_inches='tight')
-    fig.savefig(f"Results/figures/svg/{dataset}_pc_{method}_combined_rankings.svg", bbox_inches='tight')
+    fig.savefig(f"Results/figures/png/{dataset}_pc_{method}_combined_rankings.png", dpi=300)
+    fig.savefig(f"Results/figures/svg/{dataset}_pc_{method}_combined_rankings.svg")
+    plt.savefig(f"Results/figures/pdf/{dataset}_pc_{method}_combined_rankings.pdf")
+    plt.savefig(f"Results/figures/eps/{dataset}_pc_{method}_combined_rankings.eps")
     plt.close()
     
     return sae_rankings, dae_rankings
@@ -562,5 +574,6 @@ def run_all_pc_analyses(num_models, dataset, base_path, manipulated_neurons):
     print(f"Running PC zeroing analysis for {dataset}...")
     run_pc_zeroing_analysis(num_models, dataset, base_path, manipulated_neurons)
 
-# run_all_pc_analyses(40, "mnist", '/home/david/', manipulated_neurons=[(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)])
-# run_all_pc_analyses(1, "cifar", '/home/david/', manipulated_neurons=[(0, 6), (6, 10), (10, 16), (16, 28), (28, 48), (48, 90), (90, 128)])
+if __name__ == "__main__":
+    run_all_pc_analyses(40, "mnist", '/home/david/', manipulated_neurons=[(0, 4), (4, 10), (10, 17), (17, 24), (24, 32)])
+    run_all_pc_analyses(1, "cifar", '/home/david/', manipulated_neurons=[(0, 6), (6, 10), (10, 16), (16, 28), (28, 48), (48, 90), (90, 128)])

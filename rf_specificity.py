@@ -211,3 +211,5 @@ def compute_rf_specificity(model_type: str, dataset: str = "mnist",
                              size_ls=size_ls, num_epochs=num_epochs, base_path=base_path)
     
     plot_neuron_activations(model_type, dataset, epoch=num_epochs-1, neuron_idx=0)
+
+# compute_rf_specificity("sae", "mnist", num_models=2, size_ls=None, num_epochs=60)

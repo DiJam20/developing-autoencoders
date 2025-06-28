@@ -1,9 +1,17 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import torch
 from tqdm import tqdm
 from model_utils import *
+
+mpl.rcParams.update({
+    'text.usetex': True,
+    'font.family': 'serif',
+    'font.serif': ['Computer Modern'],
+    'font.size': 11
+})
 
 
 #Author: Francesco Mottes
@@ -167,25 +175,28 @@ def plot_dimensionality_comparison(dataset):
     dae_mean = np.mean(dae_results, axis=0)
     dae_std = np.std(dae_results, axis=0)
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(6.268*0.45, 2.2), dpi=300)
     epochs = np.arange(1, len(sae_mean) + 1)
 
     plt.plot(epochs, sae_mean, label='AE', color='#1a7adb', linewidth=2)
     plt.fill_between(epochs, sae_mean - sae_std, sae_mean + sae_std, color='#1a7adb', alpha=0.2)
-    plt.plot(epochs, dae_mean, label='DevAE', color='#e82817', linewidth=2)
+    plt.plot(epochs, dae_mean, label='Dev-AE', color='#e82817', linewidth=2)
     plt.fill_between(epochs, dae_mean - dae_std, dae_mean + dae_std, color='#e82817', alpha=0.2)
 
-    plt.xlabel('Epoch', fontsize=18)
-    plt.ylabel('Intrinsic Dimensionality', fontsize=18)
-    plt.title(f'Dimensionality ({dataset.upper()})', fontsize=20, pad=20)
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
-    plt.legend(fontsize=16, loc='lower right')
+    plt.xlabel('Epoch')
+    plt.ylabel('Intrinsic Dimensionality')
+    # plt.title(f'Dimensionality ({dataset.upper()})', fontsize=20, pad=20)
+    plt.xticks([0, 29, 59], [1, 30, 60])
+    plt.legend(loc='lower right')
     plt.gca().spines['top'].set_visible(False)
     plt.gca().spines['right'].set_visible(False)
+
+    plt.tight_layout()
     
     plt.savefig(f"Results/figures/png/{dataset}_dimensionality_comparison.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/{dataset}_dimensionality_comparison.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/eps/{dataset}_dimensionality_comparison.eps", bbox_inches='tight')
+    plt.savefig(f"Results/figures/pdf/{dataset}_dimensionality_comparison.pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -199,3 +210,30 @@ def run_dimensionality_analysis(dataset, size_ls, num_models, num_epochs, base_p
     plot_dimensionality_comparison(dataset)
     
     print(f"Dimensionality analysis for {dataset} complete.")
+
+if __name__ == "__main__":
+    base_path = '/home/david/'
+
+    mnist_size_ls = [4, 4, 4, 4, 4, 10,
+            10, 10, 10, 10, 16, 16,
+            16, 16, 16, 16, 16, 24,
+            24, 24, 24, 24, 24, 24, 
+            32, 32, 32, 32, 32, 32,
+            32, 32, 32, 32, 32, 32, 
+            32, 32, 32, 32, 32, 32, 
+            32, 32, 32, 32, 32, 32, 
+            32, 32, 32, 32, 32, 32,
+            32, 32, 32, 32, 32, 32,]
+    
+    cifar_size_ls = [6,   6,   6,   6,   6,   6,    # 6
+					10,  10,  10,  10,  10,  10,    # 6
+					16,  16,  16,  16,  16,  16,    # 6
+					28,  28,  28,  28,  28,  28,    # 6
+					48,  48,  48,  48,  48,  48,  48,  48, 48, # 9
+					90,  90,  90,  90,  90,  90,  90,  90,  90,  90, #10
+					128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
+					128, 128, 128, 128, 128, 128, 128 # 17
+					]
+    
+    run_dimensionality_analysis('mnist', mnist_size_ls, num_models=40, num_epochs=60, base_path=base_path)
+    run_dimensionality_analysis('cifar', cifar_size_ls, num_models=10, num_epochs=60, base_path=base_path)

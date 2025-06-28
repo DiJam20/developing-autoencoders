@@ -1,9 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import torch
 from autoencoder import *
 from model_utils import *
 from solver import *
+
+mpl.rcParams.update({
+    'text.usetex': True,
+    'font.family': 'serif',
+    'font.serif': ['Computer Modern'],
+    'font.size': 11
+})
 
 def plot_reconstructions(dataset="mnist", base_path="/home/david/", iteration=0, num_examples=5, save_path="Results/figures/"):
     """
@@ -47,10 +55,10 @@ def plot_reconstructions(dataset="mnist", base_path="/home/david/", iteration=0,
         sae_reconstructions = np.transpose(sae_reconstructions, (0, 2, 3, 1))
         dae_reconstructions = np.transpose(dae_reconstructions, (0, 2, 3, 1))
     
-    fig, axes = plt.subplots(3, num_examples, figsize=(num_examples * 2, 6))
+    fig, axes = plt.subplots(3, num_examples, figsize=(6.268*0.35, 2))
     
-    row_labels = ["Original", "AE", "DevAE"]
-    
+    row_labels = ["Original", "AE", "Dev-AE"]
+    plt.rc('font', size=11)
     for row in range(3):
         for col in range(num_examples):
             # Remove all labels
@@ -73,12 +81,14 @@ def plot_reconstructions(dataset="mnist", base_path="/home/david/", iteration=0,
                 axes[row, col].imshow(img_to_show)        
         
         # Set row label
-        axes[row, 0].set_ylabel(row_labels[row], rotation=90, size=12, labelpad=15, va="center")
+        axes[row, 0].set_ylabel(row_labels[row], rotation=90, fontsize=11, labelpad=15, va="center")
     
-    plt.suptitle(f"{dataset.upper()} Image Reconstructions", fontsize=16)
-    plt.tight_layout(rect=[0.1, 0, 1, 0.97])
+    # plt.suptitle(f"{dataset.upper()} Image Reconstructions", fontsize=16)
+    plt.tight_layout()
     plt.savefig(f"{save_path}png/{dataset}_reconstructions.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"{save_path}svg/{dataset}_reconstructions.svg", bbox_inches='tight')
+    plt.savefig(f"{save_path}eps/{dataset}_reconstructions.eps", bbox_inches='tight')
+    plt.savefig(f"{save_path}pdf/{dataset}_reconstructions.pdf", bbox_inches='tight')
     plt.close()
 
 
@@ -96,3 +106,6 @@ def create_reconstruction_examples(base_path="/home/david/", iteration=0, num_ex
     
     print("Generating CIFAR reconstruction examples...")
     plot_reconstructions("cifar", base_path, iteration, num_examples)
+
+if __name__ == "__main__":
+    create_reconstruction_examples(num_examples=3)

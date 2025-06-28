@@ -1,11 +1,19 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from tqdm import tqdm
 
 from autoencoder import *
 from model_utils import *
 from solver import *
+
+mpl.rcParams.update({
+    'text.usetex': True,
+    'font.family': 'serif',
+    'font.serif': ['Computer Modern'],
+    'font.size': 11
+})
 
 
 def get_bottleneck_activation(model, img: torch.Tensor) -> np.ndarray:
@@ -284,24 +292,25 @@ def plot_activation_per_neuron(dataset: str):
         sae_group_stds.append(np.std(sae_group))
         dae_group_stds.append(np.std(dae_group))
     
-    plt.rc('font', size=16)
+    # plt.rc('font', size=16)
     
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(6.288*0.49, 2.5))
     
     x_indices = np.arange(len(neuron_groups))
     width = 0.35
     
     plt.bar(x_indices - width/2, sae_group_means, width, label='AE', color='#1a7adb',
-            yerr=sae_group_stds, capsize=5)
+            yerr=sae_group_stds, capsize=4)
     plt.bar(x_indices + width/2, dae_group_means, width, label='Dev-AE', color='#e82817',
-            yerr=dae_group_stds, capsize=5)
+            yerr=dae_group_stds, capsize=4)
     
     plt.xlabel('Neuron Group')
-    plt.ylabel('Mean Non-Zero Activation')
-    plt.title(f'Mean Non-Zero Activation per Neuron Group ({dataset.upper()})', pad=20)
+    plt.ylabel('Mean Activation')
+    # plt.title(f'Mean Non-Zero Activation per Neuron Group ({dataset.upper()})', pad=20)
     
-    plt.xticks(x_indices, x_labels)
-    
+    plt.xticks(x_indices, x_labels, rotation=90)
+    if dataset.lower() == "mnist":
+        plt.ylim(0, 10)
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -311,6 +320,7 @@ def plot_activation_per_neuron(dataset: str):
     
     plt.savefig(f'Results/figures/png/{dataset}_nonzero_activation_per_neuron.png', bbox_inches='tight', dpi=300)
     plt.savefig(f'Results/figures/svg/{dataset}_nonzero_activation_per_neuron.svg', bbox_inches='tight')
+    plt.savefig(f'Results/figures/pdf/{dataset}_nonzero_activation_per_neuron.pdf', bbox_inches='tight')
     plt.close()
 
 
@@ -356,33 +366,43 @@ def plot_zeros_per_neuron(dataset: str = "mnist"):
         sae_group_stds.append(np.std(sae_group))
         dae_group_stds.append(np.std(dae_group))
     
-    plt.rc('font', size=16)
-    plt.figure(figsize=(12, 6))
+    # plt.rc('font', size=16)
+    plt.figure(figsize=(6.288*0.49, 2.7))
     
     # Create a grouped bar plot
     x_indices = np.arange(len(neuron_groups))
     width = 0.35
     
     plt.bar(x_indices - width/2, sae_group_means, width, label='AE', color='#1a7adb',
-            yerr=sae_group_stds, capsize=5)
+            yerr=sae_group_stds, capsize=4)
     plt.bar(x_indices + width/2, dae_group_means, width, label='Dev-AE', color='#e82817',
-            yerr=dae_group_stds, capsize=5)
+            yerr=dae_group_stds, capsize=4)
     
     plt.xlabel('Neuron Group')
-    plt.ylabel('Percentage of Zero Activations')
-    plt.title(f'Neuron Activation Sparsity by Group ({dataset.upper()})', pad=20)
+    if dataset.lower() == "cifar":
+        plt.ylabel('\% Zero Activations ($\\times10^{2}$)')
+    else:
+        plt.ylabel('\% Zero Activations')
+
+    if dataset.lower() == "cifar":
+        plt.yticks([0, 0.005, 0.01, 0.015, 0.02], 
+                   ['0', '0.5', '1.0', '1.5', '2.0'])
+    # plt.title(f'Neuron Activation Sparsity by Group ({dataset.upper()})', pad=20)
     
-    plt.xticks(x_indices, x_labels)
+    plt.xticks(x_indices, x_labels, rotation=90)
     
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     plt.ylim(bottom=0)
-    plt.legend(loc='upper right')
-    plt.tight_layout()
+    if dataset.lower() == "mnist":
+        plt.ylim(0, 40)
+    plt.legend(loc='upper left', bbox_to_anchor=(0, 1.1))
+    # plt.tight_layout()
     
     plt.savefig(f'Results/figures/png/{dataset}_zeros_per_neuron.png', bbox_inches='tight', dpi=300)
     plt.savefig(f'Results/figures/svg/{dataset}_zeros_per_neuron.svg', bbox_inches='tight')
+    plt.savefig(f'Results/figures/pdf/{dataset}_zeros_per_neuron.pdf', bbox_inches='tight')
     plt.close()
 
 
@@ -399,15 +419,15 @@ def plot_per_image_zeros_distribution(dataset: str):
     sae_per_image_zeros = results['sae_per_image_zeros']
     dae_per_image_zeros = results['dae_per_image_zeros']
     
-    plt.rc('font', size=16)
-    plt.figure(figsize=(10, 6))
+    # plt.rc('font', size=16)
+    plt.figure(figsize=(6.288*0.49, 2.5))
     
     plt.hist(sae_per_image_zeros, alpha=0.6, label='AE', color='#1a7adb')
     plt.hist(dae_per_image_zeros, alpha=0.6, label='Dev-AE', color='#e82817')
     
-    plt.xlabel('Percentage of Zero Activations per Image')
+    plt.xlabel('% Zero Activations per Image')
     plt.ylabel('Number of Images')
-    plt.title(f'Neuron Sparsity per Image ({dataset.upper()})', pad=20)
+    # plt.title(f'Neuron Sparsity per Image ({dataset.upper()})', pad=20)
     
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
@@ -417,6 +437,7 @@ def plot_per_image_zeros_distribution(dataset: str):
     
     plt.savefig(f'Results/figures/png/{dataset}_per_image_zeros_dist.png', bbox_inches='tight', dpi=300)
     plt.savefig(f'Results/figures/svg/{dataset}_per_image_zeros_dist.svg', bbox_inches='tight')
+    plt.savefig(f'Results/figures/pdf/{dataset}_per_image_zeros_dist.pdf', bbox_inches='tight')
     plt.close()
 
 
@@ -433,16 +454,16 @@ def plot_per_image_activation_distribution(dataset: str):
     sae_per_image_nonzero_means = results['sae_per_image_nonzero_means']
     dae_per_image_nonzero_means = results['dae_per_image_nonzero_means']
     
-    plt.rc('font', size=16)
-    plt.figure(figsize=(10, 6))
+    # plt.rc('font', size=16)
+    plt.figure(figsize=(6.288*0.49, 2.5))
     
     plt.hist(sae_per_image_nonzero_means, alpha=0.6, label='AE', color='#1a7adb')
     plt.hist(dae_per_image_nonzero_means, alpha=0.6, label='Dev-AE', color='#e82817')
     
-    plt.xlabel('Mean Non-Zero Activation per Image')
+    plt.xlabel('Mean Activation per Image')
     plt.ylabel('Number of Images')
-    plt.title(f'Non-Zero Neuron Activation per Image ({dataset.upper()})', pad=20)
-    
+    # plt.title(f'Non-Zero Neuron Activation per Image ({dataset.upper()})', pad=20)
+
     ax = plt.gca()
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -451,6 +472,7 @@ def plot_per_image_activation_distribution(dataset: str):
     
     plt.savefig(f'Results/figures/png/{dataset}_per_image_nonzero_activation_dist.png', bbox_inches='tight', dpi=300)
     plt.savefig(f'Results/figures/svg/{dataset}_per_image_nonzero_activation_dist.svg', bbox_inches='tight')
+    plt.savefig(f'Results/figures/pdf/{dataset}_per_image_nonzero_activation_dist.pdf', bbox_inches='tight')
     plt.close()
 
 
@@ -470,3 +492,15 @@ def run_bottleneck_activation_analysis(num_models: int, dataset: str, base_path:
     
     plot_per_image_activation_distribution(dataset)
     plot_per_image_zeros_distribution(dataset)
+
+
+if __name__ == "__main__":
+    num_models = 10
+    dataset = "cifar"
+    base_path = "/home/david/"
+    
+    run_bottleneck_activation_analysis(num_models, dataset, base_path)
+    
+    num_models = 40
+    dataset = "mnist"
+    run_bottleneck_activation_analysis(num_models, dataset, base_path)

@@ -1,3 +1,10 @@
+####
+# Adopted from:
+# Markos Genios. "Representation Learning with Increasing Dimensionality in Autoencoders".
+# Unpublished. Bachelor's Thesis. Goethe University Frankfurt, 2024.
+####
+
+
 ## import libraries
 import numpy as np
 import torch

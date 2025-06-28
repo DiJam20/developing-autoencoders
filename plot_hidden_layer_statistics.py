@@ -74,17 +74,22 @@ def plot_neuron_activations(dataset: str) -> None:
         sae_layer_std = sae_layer_std[:-1]
         dae_layer_averages = dae_layer_averages[:-1]
         dae_layer_std = dae_layer_std[:-1]
+
+        sae_layer_averages = np.concatenate([sae_layer_averages[:5], sae_layer_averages[6:]])
+        sae_layer_std = np.concatenate([sae_layer_std[:5], sae_layer_std[6:]])
+        dae_layer_averages = np.concatenate([dae_layer_averages[:5], dae_layer_averages[6:]])
+        dae_layer_std = np.concatenate([dae_layer_std[:5], dae_layer_std[6:]])
     
-    plt.rc('font', size=20)
+    # plt.rc('font', size=20)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), dpi=300)
     
     if dataset == 'mnist':
         x_labels = ['Enc1', 'Enc2', 'Bottleneck', 'Dec1', 'Dec2']
     elif dataset == 'cifar':
         x_labels = [
-            'Conv1', 'Conv2', 'Conv3', 'Conv4', 'Conv5',
-            'Bottleneck', 'Reshape', 'DeConv1', 'Conv6',
-            'DeConv2', 'Conv7'
+            'Enc 1', 'Enc 2', 'Enc 3', 'Enc 4', 'Enc 5',
+            'Bottleneck', 'Dec 1', 'Dec 2',
+            'Dec 3', 'Dec 4'
         ]
 
     # Plot SAE
@@ -114,7 +119,7 @@ def plot_neuron_activations(dataset: str) -> None:
     ax2.set_ylabel('')
 
 
-    ax2.legend([sae_bars, dae_bars], ['AE', 'DevAE'], loc='upper right')
+    ax2.legend([sae_bars, dae_bars], ['AE', 'Dev-AE'], loc='upper right')
 
     max_val = max(
         max(sae_layer_averages) + max(sae_layer_std),
@@ -123,13 +128,15 @@ def plot_neuron_activations(dataset: str) -> None:
     ax1.set_ylim(0, max_val * 1.1)
     ax2.set_ylim(0, max_val * 1.1)
     
-    fig.suptitle(f'Hidden Layer Activations ({dataset.upper()})', fontsize=24)
+    # fig.suptitle(f'Hidden Layer Activations ({dataset.upper()})', fontsize=24)
     
     plt.tight_layout()
     plt.subplots_adjust(top=0.9)
     
 
-    plt.savefig(f"Results/hidden_layer_activations_{dataset}.png")
+    plt.savefig(f"Results/figures/png/hidden_layer_activations_{dataset}.png")
+    plt.savefig(f"Results/figures/svg/hidden_layer_activations_{dataset}.svg")
+    plt.savefig(f"Results/figures/pdf/hidden_layer_activations_{dataset}.pdf")
     plt.close()
     
     return None
@@ -157,17 +164,25 @@ def plot_zero_activations(dataset: str) -> None:
         dae_always_zero = dae_always_zero[:-1]
         dae_never_zero = dae_never_zero[:-1]
         dae_sometimes_zero = dae_sometimes_zero[:-1]
+
+        sae_always_zero = np.concatenate([sae_always_zero[:5], sae_always_zero[6:]])
+        sae_never_zero = np.concatenate([sae_never_zero[:5], sae_never_zero[6:]])
+        sae_sometimes_zero = np.concatenate([sae_sometimes_zero[:5], sae_sometimes_zero[6:]])
+        
+        dae_always_zero = np.concatenate([dae_always_zero[:5], dae_always_zero[6:]])
+        dae_never_zero = np.concatenate([dae_never_zero[:5], dae_never_zero[6:]])
+        dae_sometimes_zero = np.concatenate([dae_sometimes_zero[:5], dae_sometimes_zero[6:]])
     
-    plt.rc('font', size=20)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8), dpi=300)
+    # plt.rc('font', size=20)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(6.268, 2.5), dpi=300)
     
     if dataset == 'mnist':
-        x_labels = ['Enc1', 'Enc2', 'Bottleneck', 'Dec1', 'Dec2']
+        x_labels = ['Encoder (1)', 'Encoder (2)', 'Bottleneck', 'Decoder (1)', 'Decoder (2)']
     elif dataset == 'cifar':
         x_labels = [
-            'Conv1', 'Conv2', 'Conv3', 'Conv4', 'Conv5',
-            'Bottleneck', 'Reshape', 'DeConv1', 'Conv6',
-            'DeConv2', 'Conv7'
+            'Encoder (1)', 'Encoder (2)', 'Encoder (3)', 'Encoder (4)', 'Encoder (5)',
+            'Bottleneck', 'Decoder (1)', 'Decoder (2)',
+            'Decoder (3)', 'Decoder (4)'
         ]
     
     # Plot SAE
@@ -181,15 +196,12 @@ def plot_zero_activations(dataset: str) -> None:
     bar3 = ax1.bar(x_indices, sae_never_zero, bottom=sae_bottom_never, color='#1B998B')
     
     ax1.set_xticks(x_indices)
-    if dataset == 'cifar':
-        ax1.set_xticklabels(x_labels, rotation=45, ha='right')
-    else:
-        ax1.set_xticklabels(x_labels)
-    ax1.set_ylabel('Percentage of Neurons')
+    ax1.set_xticklabels(x_labels, rotation=90)
+    ax1.set_ylabel('Activity Distribution (\%)')
     ax1.set_ylim(0, 100)
     ax1.spines['top'].set_visible(False)
     ax1.spines['right'].set_visible(False)
-    ax1.set_title('AE')
+    ax1.set_title('AE', fontsize=11)
     
     # Plot DAE
     x_indices = np.arange(len(dae_always_zero))
@@ -202,33 +214,31 @@ def plot_zero_activations(dataset: str) -> None:
     ax2.bar(x_indices, dae_never_zero, bottom=dae_bottom_never, color='#1B998B')
     
     ax2.set_xticks(x_indices)
-    if dataset == 'cifar':
-        ax2.set_xticklabels(x_labels, rotation=45, ha='right')
-    else:
-        ax2.set_xticklabels(x_labels)
+    ax2.set_xticklabels(x_labels, rotation=90)
     ax2.set_ylim(0, 100)
     ax2.spines['top'].set_visible(False)
     ax2.spines['right'].set_visible(False)
     ax2.spines['left'].set_visible(False)
     ax2.yaxis.set_visible(False)
     ax2.set_ylabel('')
-    ax2.set_title('DevAE')
+    ax2.set_title('Dev-AE', fontsize=11)
 
     fig.legend([bar1, bar2, bar3], 
               ['Inactive\nNeurons', 'Conditionally\nActive\nNeurons', 'Universally\nActive\nNeurons'], 
               loc='center', 
-              bbox_to_anchor=(0.525, 0.6),
+              bbox_to_anchor=(0.543, 0.6),
               frameon=True,
-              fontsize=16,
-              labelspacing=1.5)
+              fontsize=11,
+              labelspacing=0.5)
     
-    fig.suptitle(f'Neuron Activation Sparsity Across Network Layers ({dataset.upper()})', fontsize=24)
+    # fig.suptitle(f'Neuron Activation Sparsity Across Network Layers ({dataset.upper()})', fontsize=24)
     
     plt.tight_layout()
-    plt.subplots_adjust(top=0.85, wspace=0.3)
+    plt.subplots_adjust(wspace=0.8)
     
     plt.savefig(f"Results/figures/png/neuron_activation_patterns_{dataset}.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/neuron_activation_patterns_{dataset}.svg", bbox_inches='tight')
+    plt.savefig(f"Results/figures/pdf/neuron_activation_patterns_{dataset}.pdf", bbox_inches='tight')
     plt.close()
     
     return None
@@ -276,17 +286,17 @@ def activations_heatmap(model_type: str, layer_idx: int = 2) -> None:
     # Set x-axis ticks (epochs)
     num_epochs = max(epoch_activations_mean.shape[1], 30)
     ax.set_xticks([0.5, num_epochs//2 - 0.5, num_epochs - 0.5])
-    ax.set_xticklabels(["1", str(num_epochs//2), str(num_epochs)], fontsize=24, rotation=0)
+    ax.set_xticklabels(["1", str(num_epochs//2), str(num_epochs)], fontsize=11, rotation=0)
     
     # Set y-axis ticks (neurons)
     y_ticks = [0.5, num_neurons//2 - 0.5, num_neurons - 0.5]
     y_labels = ["1", str(num_neurons//2), str(num_neurons)]
     ax.set_yticks(y_ticks)
-    ax.set_yticklabels(y_labels, fontsize=24, rotation=90)
+    ax.set_yticklabels(y_labels, fontsize=11, rotation=90)
 
-    ax.set_title(f"Neuron Activation over Epochs ({model_type})", fontsize=28, pad=25)
-    ax.set_xlabel("Epochs", fontsize=24)
-    ax.set_ylabel("Neuron Index", fontsize=24)
+    # ax.set_title(f"Neuron Activation over Epochs ({model_type})", fontsize=28, pad=25)
+    ax.set_xlabel("Epochs", fontsize=11)
+    ax.set_ylabel("Neuron Index", fontsize=11)
     plt.tight_layout()
     plt.savefig(f"Results/{model_type}_neuron_activations_over_time.png")
     plt.close()
