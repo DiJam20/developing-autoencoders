@@ -105,7 +105,9 @@ def rgb_to_grayscale(images):
     return np.squeeze(grayscale, axis=3)
 
 
-def compute_power_spectra(save_path_sae: str, save_path_dae:str, num_models: int, epoch: int) -> tuple:
+def compute_power_spectra(save_path_sae: str, save_path_dae:str, 
+                          num_models: int, epoch: int,
+                          sae_rfs=None, dae_rfs=None) -> tuple:
     """
     Load the receptive fields of the models and compute the power spectrum of each RF.
     
@@ -119,8 +121,10 @@ def compute_power_spectra(save_path_sae: str, save_path_dae:str, num_models: int
         sae_power_spectra: list of power spectra of SAE RFs
         dae_power_spectra: list of power spectra of DAE RFs
     """
-    sae_rfs = np.load(save_path_sae)
-    dae_rfs = np.load(save_path_dae)
+    if sae_rfs is None:
+        sae_rfs = np.load(save_path_sae)
+    if dae_rfs is None:
+        dae_rfs = np.load(save_path_dae)
 
     sae_power_spectra = []
     dae_power_spectra = []

@@ -191,8 +191,7 @@ def load_conv_model(model_path, model_type, epoch, size_ls=None):
                 128, 128, 128, 128, 128, 128, 128, 128, 
                 128, 128, 128, 128, 128, 128, 128, 128, 128
                 ]
-    
-    if model_type == "sae":
+    if model_type == "sae" or model_type == "sae-pca-init":
         model = ConvAutoencoder(latent_dim=size_ls[-1])
     else:
         model = ConvAutoencoder(latent_dim=size_ls[epoch])

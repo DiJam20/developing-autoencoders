@@ -188,12 +188,13 @@ def plot_example_rfs(ax, dataset='cifar', epoch_idx=59):
     fig.savefig(f"Results/figures/eps/{dataset}_example_rfs.eps")
     
 
-fig = plt.figure(figsize=(6.26*0.72, 1.9))
-ax = fig.add_subplot(111)
-plot_example_rfs(ax, dataset='mnist')
-plt.close(fig)
+if __name__ == "__main__":
+    fig = plt.figure(figsize=(6.26*0.72, 1.9))
+    ax = fig.add_subplot(111)
+    plot_example_rfs(ax, dataset='mnist')
+    plt.close(fig)
 
-fig = plt.figure(figsize=(6.26, 1.9))
-ax = fig.add_subplot(111)
-plot_example_rfs(ax, dataset='cifar')
-plt.close(fig)
+    fig = plt.figure(figsize=(6.26, 1.9))
+    ax = fig.add_subplot(111)
+    plot_example_rfs(ax, dataset='cifar')
+    plt.close(fig)
