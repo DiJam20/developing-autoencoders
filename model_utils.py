@@ -191,7 +191,8 @@ def load_conv_model(model_path, model_type, epoch, size_ls=None):
                 128, 128, 128, 128, 128, 128, 128, 128, 
                 128, 128, 128, 128, 128, 128, 128, 128, 128
                 ]
-    if model_type == "sae" or model_type == "sae-pca-init":
+    if (model_type == "sae" 
+        or model_type == "pca-ae"):
         model = ConvAutoencoder(latent_dim=size_ls[-1])
     else:
         model = ConvAutoencoder(latent_dim=size_ls[epoch])
@@ -234,7 +235,7 @@ def cosine_angle_between_vectors(vec_a, vec_b):
 # Yumi Kondo, 22.09.2018
 def draw_circle(shape, diameter):
     assert len(shape) == 2
-    circle_mask = np.zeros(shape,dtype=np.bool)
+    circle_mask = np.zeros(shape, dtype=bool)
     center = np.array(circle_mask.shape)/2.0
 
     for iy in range(shape[0]):
@@ -246,7 +247,7 @@ def draw_circle(shape, diameter):
 # Source: https://fairyonice.github.io/Low-and-High-pass-filtering-experiments.html
 # Yumi Kondo, 22.09.2018
 def filter_circle(circle_mask, full_fft_filter):
-    temp = np.zeros(full_fft_filter.shape,dtype=complex)
+    temp = np.zeros(full_fft_filter.shape, dtype=complex)
     temp[circle_mask] = full_fft_filter[circle_mask]
     return(temp)
 

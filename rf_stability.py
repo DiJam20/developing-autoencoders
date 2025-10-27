@@ -9,13 +9,13 @@ from autoencoder import *
 from solver import *
 from model_utils import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11,
-    'axes.titlesize': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11,
+#     'axes.titlesize': 11
+# })
 
 
 def display_ready_rf(rf: np.ndarray, dataset: str = "mnist") -> np.ndarray:

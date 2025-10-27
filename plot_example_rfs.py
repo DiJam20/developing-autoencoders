@@ -8,12 +8,12 @@ import seaborn as sns
 from matplotlib.colors import ListedColormap
 
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11
+# })
 
 MODEL_IDX_FOR_EXAMPLE_RF = 1
 

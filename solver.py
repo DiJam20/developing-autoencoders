@@ -14,6 +14,7 @@ import os, sys
 import argparse
 import time
 from tqdm import tqdm
+from sklearn.decomposition import PCA
 
 from autoencoder import LinearAutoencoder, NonLinearAutoencoder, ConvAutoencoder
 
@@ -21,140 +22,139 @@ from autoencoder import LinearAutoencoder, NonLinearAutoencoder, ConvAutoencoder
 
 ## define the training function
 def train(model,train_loader,optimizer,epoch,device):
-	model.to(device)
-	model.train()
-	train_loss = 0
-
-	pbar = tqdm(enumerate(train_loader),total=len(train_loader))
-	all_losses = []
-	for batch_idx, (data, target) in pbar:
-		data = Variable(data)
-		optimizer.zero_grad()
-		batch_size = data.size()[0]
-		input = data.view(batch_size,-1).to(device)
-		encoded, decoded = model(input)
-		loss = F.mse_loss(decoded, input)
-		loss.backward()
-		train_loss += loss.item()
-		optimizer.step()
-		pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-			epoch, batch_idx * len(data), len(train_loader.dataset),
-			100. * batch_idx / len(train_loader),
-			loss.item() / len(data)))
-		all_losses.append(loss.item())
-	train_loss /= len(train_loader)
-	print('====> Epoch: {} Average loss: {:.4f}'.format(
-		epoch, train_loss))
-	return train_loss, all_losses
+    model.to(device)
+    model.train()
+    train_loss = 0
+    
+    pbar = tqdm(enumerate(train_loader),total=len(train_loader))
+    all_losses = []
+    for batch_idx, (data, target) in pbar:
+        data = Variable(data)
+        optimizer.zero_grad()
+        batch_size = data.size()[0]
+        input = data.view(batch_size,-1).to(device)
+        encoded, decoded = model(input)
+        loss = F.mse_loss(decoded, input)
+        loss.backward()
+        train_loss += loss.item()
+        optimizer.step()
+        pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            epoch, batch_idx * len(data), len(train_loader.dataset),
+            100. * batch_idx / len(train_loader),
+            loss.item() / len(data)))
+        
+        all_losses.append(loss.item())
+    train_loss /= len(train_loader)
+    print('====> Epoch: {} Average loss: {:.4f}'.format(
+        epoch, train_loss))
+    return train_loss, all_losses
 
 def train_vali_all_epochs(model,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
-	train_losses = []
-	vali_losses = []
-	all_train_losses = []
-	for epoch in range(n_epochs):
-		train_loss,train_loss_per_batch = train(model,train_loader,optimizer,epoch,device)
-		vali_loss,_,_ = test(model,vali_loader,device)
-		train_losses.append(train_loss)
-		all_train_losses.append(train_loss_per_batch)
-		vali_losses.append(vali_loss)
-		if save_path is not None:
-			if not os.path.exists(save_path):
-				os.makedirs(save_path)
-				print('Directory created:', save_path)
-			torch.save(model.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-			print('Weights saved.')
-	np.save(save_path + 'all_train_losses.npy',all_train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
+    train_losses = []
+    vali_losses = []
+    all_train_losses = []
+    for epoch in range(n_epochs):
+        train_loss,train_loss_per_batch = train(model,train_loader,optimizer,epoch,device)
+        vali_loss,_,_ = test(model,vali_loader,device)
+        train_losses.append(train_loss)
+        all_train_losses.append(train_loss_per_batch)
+        vali_losses.append(vali_loss)
+        if save_path is not None:
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+                print('Directory created:', save_path)
+            torch.save(model.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+            print('Weights saved.')
+    np.save(save_path + 'all_train_losses.npy',all_train_losses)
+    print('All train losses saved.')
+    return train_losses, vali_losses
 
 def size_per_epoch(size_ls,n_epochs,type='step'):
-	if type == 'constant':
-		size_epoch = [size_ls[0]]*n_epochs
-	elif type == 'step':
-		nsteps = len(size_ls)
-		rep = n_epochs//nsteps
-		size_epoch = np.repeat(size_ls,rep)
-		if n_epochs - len(size_epoch) > 0:
-			size_epoch = np.append(size_epoch,[size_ls[-1]]*(n_epochs - len(size_epoch)))
-	return size_epoch
+    if type == 'constant':
+        size_epoch = [size_ls[0]]*n_epochs
+    elif type == 'step':
+        nsteps = len(size_ls)
+        rep = n_epochs//nsteps
+        size_epoch = np.repeat(size_ls,rep)
+        if n_epochs - len(size_epoch) > 0:
+            size_epoch = np.append(size_epoch,[size_ls[-1]]*(n_epochs - len(size_epoch)))
+    return size_epoch
 
 def varying_dim(A, B):
-	'''returns the index of the dimension-tuple, at which both numbers differ.'''
-	if A.shape == B.shape:
-		return -1
-	return torch.nonzero(torch.tensor(A.shape) - torch.tensor(B.shape))[0].item()
+    '''returns the index of the dimension-tuple, at which both numbers differ.'''
+    if A.shape == B.shape:
+        return -1
+    return torch.nonzero(torch.tensor(A.shape) - torch.tensor(B.shape))[0].item()
 
 def set_old_weights(new_weights, trained_weights):
-	'''Sets the part, that corresponds in size with the trained_weights-tensor
-	to the larger tensor "new_weights".'''
-	var_dim = varying_dim(new_weights, trained_weights)
-	print('debug var_dim',var_dim)
-	if var_dim == 0:
-		new_weights[:trained_weights.size(0)] = trained_weights[:trained_weights.size(0)]
-	elif var_dim == 1:
-		new_weights[:,:trained_weights.size(1)] = trained_weights[:,:trained_weights.size(1)]
-	elif var_dim == -1:
-		new_weights = trained_weights
-	return new_weights
+    '''Sets the part, that corresponds in size with the trained_weights-tensor
+    to the larger tensor "new_weights".'''
+    var_dim = varying_dim(new_weights, trained_weights)
+    print('debug var_dim',var_dim)
+    if var_dim == 0:
+        new_weights[:trained_weights.size(0)] = trained_weights[:trained_weights.size(0)]
+    elif var_dim == 1:
+        new_weights[:,:trained_weights.size(1)] = trained_weights[:,:trained_weights.size(1)]
+    elif var_dim == -1:
+        new_weights = trained_weights
+    return new_weights
 
 def divide_latent_tensor(tensor, new_dim):
-	"""
-	Input: 
-	tensor ~ latent vector or rows of latent vectors
-	new_dim ~ new dimension for the latent vector
+    """
+    Input: 
+    tensor ~ latent vector or rows of latent vectors
+    new_dim ~ new dimension for the latent vector
 
-	Output:
-	new_tensor ~ The latent vector (or the latent vectors in each row)
-	get extended to the dimension new_dim, with an integer multiple of the
-	original weights. The rest of the new tensor gets sampled values from
-	a distribution with mean and std being based on the values of the original weights.
-	"""
-	one_dim = False
-	gpu = False
-	if tensor.device.type == 'gpu':  
-		gpu = True
-	if len(tensor.shape) == 1:  
-		one_dim = True
-		tensor = tensor.unsqueeze(0)
-	tensor_size = tensor.size()
-	# Calculate the number of lines and the number of weights in each line.
-	lines = tensor_size[0]  
-	multiple = new_dim//tensor_size[1]  
-	# Calculate the rest of the weights that need to be added.
-	rest = new_dim % tensor_size[1] 
-	new_tensor = torch.zeros(lines, new_dim)
-	# Fill the new tensor with the old tensor as often as it fits.
-	new_tensor[:, :multiple*tensor_size[1]] = torch.cat([tensor]*multiple, dim=1)  
-	mean = tensor.view(-1).mean()  
-	std = tensor.view(-1).std() 
-	# add a little noise to the old weights
-	new_tensor[:, :multiple*tensor_size[1]] += torch.normal(mean=mean, std=0.1*std, size=(lines, multiple*tensor_size[1]))
-	# Fill the rest of the new tensor with random values.
-	new_tensor[:, multiple*tensor_size[1]:] = torch.normal(mean=mean, std=std, size=(lines, rest)) 
-	if one_dim:
-		new_tensor = new_tensor[0]  
-	if gpu:
-		new_tensor.to('gpu')
-	return new_tensor
+    Output:
+    new_tensor ~ The latent vector (or the latent vectors in each row)
+    get extended to the dimension new_dim, with an integer multiple of the
+    original weights. The rest of the new tensor gets sampled values from
+    a distribution with mean and std being based on the values of the original weights.
+    """
+    one_dim = False
+    device = tensor.device  # Get the device from the input tensor
+
+    if len(tensor.shape) == 1:  
+        one_dim = True
+        tensor = tensor.unsqueeze(0)
+    tensor_size = tensor.size()
+    # Calculate the number of lines and the number of weights in each line.
+    lines = tensor_size[0]  
+    multiple = new_dim//tensor_size[1]  
+    # Calculate the rest of the weights that need to be added.
+    rest = new_dim % tensor_size[1] 
+    new_tensor = torch.zeros(lines, new_dim, device=device)
+    # Fill the new tensor with the old tensor as often as it fits.
+    new_tensor[:, :multiple*tensor_size[1]] = torch.cat([tensor]*multiple, dim=1)  
+    mean = tensor.view(-1).mean()  
+    std = tensor.view(-1).std() 
+    # add a little noise to the old weights
+    new_tensor[:, :multiple*tensor_size[1]] += torch.normal(mean=mean, std=0.1*std, size=(lines, multiple*tensor_size[1]), device=device)
+    # Fill the rest of the new tensor with random values.
+    new_tensor[:, multiple*tensor_size[1]:] = torch.normal(mean=mean, std=std, size=(lines, rest), device=device) 
+    if one_dim:
+        new_tensor = new_tensor[0]  
+    
+    return new_tensor
 
 
 def extend_tensor_with_noise(tensor, new_dim, dim=0):
     """
-	Fills tensor with noise to match new_dim along the specified dimension.
-	Noise is drawn from a normal distribution with mean and standard deviation
-	based on the original tensor values.
-	1D tensors (biases) are extended along dimension 0.
-	2D tensors (weights) are extended along dimension 0 for encoder weights
-	and along dimension 1 for decoder weights.
-	Encoder (dim 0)
-		w1,1 w1,2 ... w1,128	-->		w1,1 w1,2 ... w1,128
-		...						-->		...
-		w4,1 w4,2 ... w4,128 	-->		...
-										w4,1 w4,2 ... w4,128
-	Decoder (dim 1)
-		w1,1 w1,2 ... w1,4		-->		w1,1 w1,2 ... w1,4 ... w1,8
-		...						-->		...
-		w128,1 w128,2 ... w128,4-->		w128,1 w128,2 ... w128,4 ... w128,8
+    Fills tensor with noise to match new_dim along the specified dimension.
+    Noise is drawn from a normal distribution with mean and standard deviation
+    based on the original tensor values.
+    1D tensors (biases) are extended along dimension 0.
+    2D tensors (weights) are extended along dimension 0 for encoder weights
+    and along dimension 1 for decoder weights.
+    Encoder (dim 0)
+        w1,1 w1,2 ... w1,128	-->		w1,1 w1,2 ... w1,128
+        ...						-->		...
+        w4,1 w4,2 ... w4,128 	-->		...
+                                        w4,1 w4,2 ... w4,128
+    Decoder (dim 1)
+        w1,1 w1,2 ... w1,4		-->		w1,1 w1,2 ... w1,4 ... w1,8
+        ...						-->		...
+        w128,1 w128,2 ... w128,4-->		w128,1 w128,2 ... w128,4 ... w128,8
     """
     # Get tensor shape
     tensor_shape = tensor.shape
@@ -224,35 +224,35 @@ def extend_tensor_with_noise(tensor, new_dim, dim=0):
     return new_tensor
 
 def divide_enc_tensor(tensor, new_dim):
-	"""
-	Multiplies the given tensor in a way that it matches the new_dim parameter.
-	Weights are just doubled as far as possible (integer multiple).
-	The rest of the values are drawn from a gaussian with mean and std based
-	on the values of the input tensor.
-	"""
-	size = tensor.size()
-	old_dim, weight_size = size[0], size[1]
-	multiple = new_dim//old_dim
-	rest = new_dim%old_dim
+    """
+    Multiplies the given tensor in a way that it matches the new_dim parameter.
+    Weights are just doubled as far as possible (integer multiple).
+    The rest of the values are drawn from a gaussian with mean and std based
+    on the values of the input tensor.
+    """
+    size = tensor.size()
+    old_dim, weight_size = size[0], size[1]
+    multiple = new_dim//old_dim
+    rest = new_dim%old_dim
+    device = tensor.device # Get the device from the input tensor
 
-	# Repeat the original tensor to construct the first 8 lines
-	div_tensor = torch.cat([tensor]*multiple, dim=0)
+    # Repeat the original tensor to construct the first 8 lines
+    div_tensor = torch.cat([tensor]*multiple, dim=0)
 
-	# Calculate mean and standard deviation of the original tensor
-	mean = tensor.view(-1).mean()
-	std_dev = tensor.std(dim=1).std()
+    # Calculate mean and standard deviation of the original tensor
+    mean = tensor.view(-1).mean()
+    std_dev = tensor.std(dim=1).std()
 
-	# add noise to the new weights
-	noise = torch.normal(mean=mean, std=0.1*std_dev, size=(old_dim*(multiple-1), weight_size))
-	div_tensor[old_dim:] += noise
+    # add noise to the new weights, ensuring it's on the correct device
+    noise = torch.normal(mean=mean, std=0.1*std_dev, size=(old_dim*(multiple-1), weight_size), device=device)
+    div_tensor[old_dim:] += noise
 
-	# Generate new samples based on a normal distribution with similar statistics
-	rest_samples = torch.normal(mean=mean, std=std_dev, size=(rest, weight_size))
-	# Concatenate the new samples to complete the final tensor
-	new_weights = torch.cat((div_tensor, rest_samples), dim=0)
-	if tensor.device.type == 'gpu':
-		new_weights.to('gpu')
-	return new_weights
+    # Generate new samples based on a normal distribution with similar statistics
+    rest_samples = torch.normal(mean=mean, std=std_dev, size=(rest, weight_size), device=device)
+    # Concatenate the new samples to complete the final tensor
+    new_weights = torch.cat((div_tensor, rest_samples), dim=0)
+    
+    return new_weights
 
 def cut_enc_tensor(tensor):
     cut_number = np.ceil(tensor.shape[0] * 0.1)
@@ -267,40 +267,40 @@ def cut_dec_tensor(tensor):
     return tensor[:, :-int(cut_number)].clone()  # Klonen, weil sich sonst der "stride" nicht ändert! (Technischer stuff)
 
 def l_develope_AE(new_n_hidden_ls,hyperparam,save_path,epoch,manner='naiv'):
-	new_size = new_n_hidden_ls[-1]
-	# Create new autoencoder with corresponding bottleneck size.
-	n_layers = hyperparam['n_layers']
-	autoencoder = LinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,n_layers)
+    new_size = new_n_hidden_ls[-1]
+    # Create new autoencoder with corresponding bottleneck size.
+    n_layers = hyperparam['n_layers']
+    autoencoder = LinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,n_layers)
 
-	# Load the weights learned in the last epoch.
-	state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
-	num_weights = state_dict["encoder.encoder_{}.weight".format(n_layers)].size(1)  
-	# Use different manners to determine the new weights.
-	if manner == 'naiv':
-		new_weights_encoder = torch.randn(new_size, num_weights)
-		new_bias_encoder = torch.randn(new_size)
-		new_weights_decoder = torch.randn(num_weights, new_size)
-	elif manner == 'cell_division':
-		# In the following three lines, a part of the new, randomly initialized, weights get assigned
-		# to the weights that were learned in the last epoch.
-		new_weights_encoder = divide_enc_tensor(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size)
-		new_bias_encoder = divide_latent_tensor(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size)
-		new_weights_decoder = divide_latent_tensor(state_dict["decoder.decoder_1.weight"], new_size)
-		
-	# Use the new weights to update the state_dict.
-	state_dict["encoder.encoder_{}.weight".format(n_layers)] = \
-		set_old_weights(new_weights_encoder, state_dict["encoder.encoder_{}.weight".format(n_layers)])
-	state_dict["encoder.encoder_{}.bias".format(n_layers)] = \
-		set_old_weights(new_bias_encoder, state_dict["encoder.encoder_{}.bias".format(n_layers)])
-	state_dict["decoder.decoder_1.weight"] = \
-		set_old_weights(new_weights_decoder, state_dict["decoder.decoder_1.weight"])
-	# use new state_dict to update model weights
-	print('debug nan in encoder weights',torch.isnan(state_dict["encoder.encoder_{}.weight".format(n_layers)]).sum())
-	print('debug nan in encoder bias',torch.isnan(state_dict["encoder.encoder_{}.bias".format(n_layers)]).sum())
-	print('debug nan in decoder weights',torch.isnan(state_dict["decoder.decoder_1.weight"]).sum())
-	autoencoder.load_state_dict(state_dict)
+    # Load the weights learned in the last epoch.
+    state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
+    num_weights = state_dict["encoder.encoder_{}.weight".format(n_layers)].size(1)  
+    # Use different manners to determine the new weights.
+    if manner == 'naiv':
+        new_weights_encoder = torch.randn(new_size, num_weights)
+        new_bias_encoder = torch.randn(new_size)
+        new_weights_decoder = torch.randn(num_weights, new_size)
+    elif manner == 'cell_division':
+        # In the following three lines, a part of the new, randomly initialized, weights get assigned
+        # to the weights that were learned in the last epoch.
+        new_weights_encoder = divide_enc_tensor(state_dict["encoder.encoder_{}.weight".format(n_layers)], new_size)
+        new_bias_encoder = divide_latent_tensor(state_dict["encoder.encoder_{}.bias".format(n_layers)], new_size)
+        new_weights_decoder = divide_latent_tensor(state_dict["decoder.decoder_1.weight"], new_size)
+        
+    # Use the new weights to update the state_dict.
+    state_dict["encoder.encoder_{}.weight".format(n_layers)] = \
+        set_old_weights(new_weights_encoder, state_dict["encoder.encoder_{}.weight".format(n_layers)])
+    state_dict["encoder.encoder_{}.bias".format(n_layers)] = \
+        set_old_weights(new_bias_encoder, state_dict["encoder.encoder_{}.bias".format(n_layers)])
+    state_dict["decoder.decoder_1.weight"] = \
+        set_old_weights(new_weights_decoder, state_dict["decoder.decoder_1.weight"])
+    # use new state_dict to update model weights
+    print('debug nan in encoder weights',torch.isnan(state_dict["encoder.encoder_{}.weight".format(n_layers)]).sum())
+    print('debug nan in encoder bias',torch.isnan(state_dict["encoder.encoder_{}.bias".format(n_layers)]).sum())
+    print('debug nan in decoder weights',torch.isnan(state_dict["decoder.decoder_1.weight"]).sum())
+    autoencoder.load_state_dict(state_dict)
 
-	return autoencoder
+    return autoencoder
 
 
 def nl_develope_AE(new_n_hidden_ls, hyperparam, save_path, epoch, manner='naiv'):
@@ -347,125 +347,126 @@ def nl_develope_AE(new_n_hidden_ls, hyperparam, save_path, epoch, manner='naiv')
 
 
 def develope_convAE(new_size,save_path,epoch,manner='naiv'):
-	# Create new autoencoder with corresponding bottleneck size.
-	n_layers = 11
-	autoencoder = ConvAutoencoder(new_size)
+    # Create new autoencoder with corresponding bottleneck size.
+    n_layers = 11
+    autoencoder = ConvAutoencoder(new_size)
 
-	# Load the weights learned in the last epoch.
-	state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
-	num_weights = state_dict["encoder.{}.weight".format(n_layers)].size(1)  
-	# Use different manners to determine the new weights.
-	if manner == 'naiv':
-		new_weights_encoder = torch.randn(new_size, num_weights)
-		new_bias_encoder = torch.randn(new_size)
-		new_weights_decoder = torch.randn(num_weights, new_size)
-	elif manner == 'cell_division':
-		# In the following three lines, a part of the new, randomly initialized, weights get assigned
-		# to the weights that were learned in the last epoch.
-		new_weights_encoder = divide_enc_tensor(state_dict["encoder.{}.weight".format(n_layers)], new_size)
-		new_bias_encoder = divide_latent_tensor(state_dict["encoder.{}.bias".format(n_layers)], new_size)
-		new_weights_decoder = divide_latent_tensor(state_dict["linear.0.weight"], new_size)
-		
-	# Use the new weights to update the state_dict.
-	state_dict["encoder.{}.weight".format(n_layers)] = \
-		set_old_weights(new_weights_encoder, state_dict["encoder.{}.weight".format(n_layers)])
-	state_dict["encoder.{}.bias".format(n_layers)] = \
-		set_old_weights(new_bias_encoder, state_dict["encoder.{}.bias".format(n_layers)])
-	state_dict["linear.0.weight"] = \
-		set_old_weights(new_weights_decoder, state_dict["linear.0.weight"])
-	# use new state_dict to update model weights
-	print('debug nan in encoder weights',torch.isnan(state_dict["encoder.{}.weight".format(n_layers)]).sum())
-	print('debug nan in encoder bias',torch.isnan(state_dict["encoder.{}.bias".format(n_layers)]).sum())
-	print('debug nan in decoder weights',torch.isnan(state_dict["linear.0.weight"]).sum())
-	autoencoder.load_state_dict(state_dict)
+    # Load the weights learned in the last epoch.
+    state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
+    num_weights = state_dict["encoder.{}.weight".format(n_layers)].size(1)  
+    # Use different manners to determine the new weights.
+    if manner == 'naiv':
+        new_weights_encoder = torch.randn(new_size, num_weights)
+        new_bias_encoder = torch.randn(new_size)
+        new_weights_decoder = torch.randn(num_weights, new_size)
+    elif manner == 'cell_division':
+        # In the following three lines, a part of the new, randomly initialized, weights get assigned
+        # to the weights that were learned in the last epoch.
+        new_weights_encoder = divide_enc_tensor(state_dict["encoder.{}.weight".format(n_layers)], new_size)
+        new_bias_encoder = divide_latent_tensor(state_dict["encoder.{}.bias".format(n_layers)], new_size)
+        new_weights_decoder = divide_latent_tensor(state_dict["linear.0.weight"], new_size)
+        
+    # Use the new weights to update the state_dict.
+    state_dict["encoder.{}.weight".format(n_layers)] = \
+        set_old_weights(new_weights_encoder, state_dict["encoder.{}.weight".format(n_layers)])
+    state_dict["encoder.{}.bias".format(n_layers)] = \
+        set_old_weights(new_bias_encoder, state_dict["encoder.{}.bias".format(n_layers)])
+    state_dict["linear.0.weight"] = \
+        set_old_weights(new_weights_decoder, state_dict["linear.0.weight"])
+    # use new state_dict to update model weights
+    print('debug nan in encoder weights',torch.isnan(state_dict["encoder.{}.weight".format(n_layers)]).sum())
+    print('debug nan in encoder bias',torch.isnan(state_dict["encoder.{}.bias".format(n_layers)]).sum())
+    print('debug nan in decoder weights',torch.isnan(state_dict["linear.0.weight"]).sum())
+    autoencoder.load_state_dict(state_dict)
 
-	return autoencoder
-	
+    return autoencoder
+    
 
 def l_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
-	if save_path is None:
-		save_path = './'
-	else:
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
-			print('Directory created:', save_path)
-	train_losses = []
-	all_train_losses = []
-	vali_losses = []
-	size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
-	np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
-	hyperparam = model.get_hyperparams()
-	print(size_each_epoch)
+    if save_path is None:
+        save_path = './'
+    else:
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+            print('Directory created:', save_path)
+    train_losses = []
+    all_train_losses = []
+    vali_losses = []
+    size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
+    np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
+    hyperparam = model.get_hyperparams()
+    print(size_each_epoch)
 
-	for epoch in range(n_epochs):
-		print(size_each_epoch[epoch])
-		# Create new autoencoder with corresponding bottleneck size.
-		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
-		if epoch == 0:
-			ae =LinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
+    for epoch in range(n_epochs):
+        print(size_each_epoch[epoch])
+        # Create new autoencoder with corresponding bottleneck size.
+        new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
+        if epoch == 0:
+            ae =LinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
 
-		else:
-			ae = l_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
-			optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
-			
-		train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
-		vali_loss,_,_ = test(ae,vali_loader,device)
-		train_losses.append(train_loss)
-		all_train_losses.append(train_loss_per_batch)
-		vali_losses.append(vali_loss)
+        else:
+            ae = l_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
+            optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
+            
+        train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
+        vali_loss,_,_ = test(ae,vali_loader,device)
+        train_losses.append(train_loss)
+        all_train_losses.append(train_loss_per_batch)
+        vali_losses.append(vali_loss)
 
-		# Save the weights of the last epoch.
-		torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-		print('Weights saved.')
-	np.save(save_path + 'all_train_losses.npy',all_train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
+        # Save the weights of the last epoch.
+        torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+        print('Weights saved.')
+    np.save(save_path + 'all_train_losses.npy',all_train_losses)
+    print('All train losses saved.')
+    return train_losses, vali_losses
 
 def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,optimizer,n_epochs,device,save_path=None):
-	if save_path is None:
-		save_path = './'
-	else:
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
-			print('Directory created:', save_path)
-	train_losses = []
-	all_train_losses = []
-	vali_losses = []
-	size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
-	np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
-	hyperparam = model.get_hyperparams()
-	print(size_each_epoch)
+    if save_path is None:
+        save_path = './'
+    else:
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+            print('Directory created:', save_path)
+    train_losses = []
+    all_train_losses = []
+    vali_losses = []
+    size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
+    np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
+    hyperparam = model.get_hyperparams()
+    print(size_each_epoch)
 
-	current_bottleneck_size = None
-	ae = None
+    current_bottleneck_size = None
+    ae = None
 
-	for epoch in range(n_epochs):
-		print(size_each_epoch[epoch])
-		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
-		
-		# Only reinitialise autoencoder and optimiser when the bottleneck size increases
-		if size_each_epoch[epoch] != current_bottleneck_size or ae is None:
-			current_bottleneck_size = size_each_epoch[epoch]
+    for epoch in range(n_epochs):
+        print(size_each_epoch[epoch])
+        new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1] , size_each_epoch[epoch])
+        
+        # Only reinitialise autoencoder and optimiser when the bottleneck size increases
+        if size_each_epoch[epoch] != current_bottleneck_size or ae is None:
+            current_bottleneck_size = size_each_epoch[epoch]
 
-			if epoch == 0:
-				ae = NonLinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
-			else:
-				ae = nl_develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
+            if epoch == 0:
+                ae = NonLinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
+            else:
+                ae = nl_develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
 
-			optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
-		
-		train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
-		vali_loss,_,_ = test(ae,vali_loader,device)
-		train_losses.append(train_loss)
-		all_train_losses.append(train_loss_per_batch)
-		vali_losses.append(vali_loss)
+            optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+        
+        train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
+        vali_loss,_,_ = test(ae,vali_loader,device)
+        train_losses.append(train_loss)
+        all_train_losses.append(train_loss_per_batch)
+        vali_losses.append(vali_loss)
 
-		# Save the weights of the last epoch.
-		torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-		print('Weights saved.')
-	np.save(save_path + 'all_train_losses.npy',all_train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
+        # Save the weights of the last epoch.
+        torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+        print('Weights saved.')
+    np.save(save_path + 'all_train_losses.npy',all_train_losses)
+    print('All train losses saved.')
+    return train_losses, vali_losses
+
 
 # def dev_train_vali_converge(model, size_ls, manner, train_loader, vali_loader, optimizer, device, save_path=None):
 # 	if save_path is None:
@@ -479,10 +480,10 @@ def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,o
 # 	vali_losses = []
 # 	hyperparam = model.get_hyperparams()
 # 	epoch = 0
-	
+    
 # 	for size in size_ls:
 # 		new_n_hidden_ls = np.append(hyperparam['n_hidden_ls'][:-1], size)
-		
+        
 # 		converged = False
 # 		train_loss_old = float('inf')
 
@@ -523,277 +524,442 @@ def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,o
 # 	return train_losses, vali_losses
 
 
+def dev_train_vali_converge_conv(size_ls, manner, train_loader, vali_loader, device, save_path=None):
+    if save_path is None:
+        save_path = './'
+    else:
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+            print('Directory created:', save_path)
+    train_losses = []
+    vali_losses = []
+    epoch = 0
+    new_size_ls = []
+
+    for i, size in enumerate(size_ls):
+
+        converged = False
+        train_loss_old = float('inf')
+
+        while not converged:
+            print(f"Epoch {epoch}, Bottleneck Size {size}")
+            new_size_ls.append(size)
+
+            if epoch == 0:
+                ae = ConvAutoencoder(size)
+                optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+            else:
+                ae = develope_convAE(size, save_path=save_path, epoch=epoch, manner=manner)
+                optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+
+            ae.to(device)
+
+            train_loss = train_conv(ae, train_loader, optimizer, epoch, device)
+            vali_loss, _, _ = test_conv(ae, vali_loader, device)
+            train_losses.append(train_loss)
+            vali_losses.append(vali_loss)
+
+            # Save the weights of the current epoch.
+            torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+
+            # Check for convergence
+            is_last_size = (i == len(size_ls) - 1)
+            convergence_threshold = 0.999 if is_last_size else 0.99
+
+            if train_loss < train_loss_old * convergence_threshold:
+                train_loss_old = train_loss
+            else:
+                converged = True
+            
+            epoch += 1
+
+    np.save(save_path + 'train_losses.npy', train_losses)
+    return train_losses, vali_losses, new_size_ls
+
+
+
 ## define the testing function
 def test(model,test_loader,device):
-	model.eval()
-	test_loss = 0
-	with torch.no_grad():
-		for data, _ in test_loader:
-			data = Variable(data, volatile=True).to(device)
-
-			input = data.view(data.size(0), -1)
-			encoded, decoded = model(input)
-			test_loss += F.mse_loss(decoded, input).item()
-		test_loss /= len(test_loader)
-		print('====> Test set loss: {:.4f}'.format(test_loss))
-	return test_loss, decoded, data
+    model.eval()
+    test_loss = 0
+    with torch.no_grad():
+        for data, _ in test_loader:
+            data = data.to(device)
+            input = data.view(data.size(0), -1)
+            encoded, decoded = model(input)
+            test_loss += F.mse_loss(decoded, input).item()
+        test_loss /= len(test_loader)
+        print('====> Test set loss: {:.4f}'.format(test_loss))
+    return test_loss, decoded, data
 
 
 ## define training function for convolutional autoencoder
 def train_conv(model,train_loader,optimizer,epoch,device='cpu'):
-	model.train()
-	train_loss = 0
+    model.train()
+    train_loss = 0
 
-	pbar = tqdm(enumerate(train_loader),total=len(train_loader))
-	for batch_idx, data in pbar:
-		# Handle case where dataloader returns only data (no targets)
-		if isinstance(data, (list, tuple)):
-			data = data[0]  # Extract data from tuple if needed
-		data = Variable(data).to(device)  # Move data to device
-		optimizer.zero_grad()
-		# print('debug data shape',data.shape)
-		encoded, decoded = model(data)
-		# print('debug decoded shape',decoded.shape)
-		# print('debug encoded shape',encoded.shape)
-		loss = F.mse_loss(decoded, data)
-		loss.backward()
-		train_loss += loss.item()
-		optimizer.step()
-		pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-			epoch, batch_idx * len(data), len(train_loader.dataset),
-			100. * batch_idx / len(train_loader),
-			loss.item() / len(data)))
-	train_loss /= len(train_loader)
-	print('====> Epoch: {} Average loss: {:.4f}'.format(
-		epoch, train_loss))
-	return train_loss
+    pbar = tqdm(enumerate(train_loader),total=len(train_loader))
+    for batch_idx, data in pbar:
+        # Handle case where dataloader returns only data (no targets)
+        if isinstance(data, (list, tuple)):
+            data = data[0]  # Extract data from tuple if needed
+        data = Variable(data).to(device)  # Move data to device
+        optimizer.zero_grad()
+        # print('debug data shape',data.shape)
+        encoded, decoded = model(data)
+        # print('debug decoded shape',decoded.shape)
+        # print('debug encoded shape',encoded.shape)
+        loss = F.mse_loss(decoded, data)
+        loss.backward()
+        train_loss += loss.item()
+        optimizer.step()
+        pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            epoch, batch_idx * len(data), len(train_loader.dataset),
+            100. * batch_idx / len(train_loader),
+            loss.item()))
+    train_loss /= len(train_loader)
+    print('====> Epoch: {} Average loss: {:.4f}'.format(
+        epoch, train_loss))
+    return train_loss
 
 ## define testing function for convolutional autoencoder
 def test_conv(model,test_loader,device='cpu'):
-	model.eval()
-	test_loss = 0
-	decoded = None
-	data = None
-	with torch.no_grad():
-		for batch in test_loader:
-			# Handle case where dataloader returns only data (no targets)
-			if isinstance(batch, (list, tuple)):
-				data = batch[0]  # Extract data from tuple if needed
-			else:
-				data = batch
-			data = Variable(data).to(device)  # Move data to device
-			encoded, decoded = model(data)
-			test_loss += F.mse_loss(decoded, data, reduction='sum').item()
-	test_loss /= len(test_loader.dataset)
-	print('====> Test set loss: {:.4f}'.format(test_loss))
-	return test_loss, decoded, data
+    model.eval()
+    test_loss = 0
+    for data, _ in test_loader:
+        data = Variable(data).to(device)
+        encoded, decoded = model(data)
+        test_loss += F.mse_loss(decoded, data).item()
+    test_loss /= len(test_loader)
+    print('====> Test set loss: {:.4f}'.format(test_loss))
+    return test_loss, decoded,data
 
 
-def train_vali_all_epochs_conv(model,train_loader,vali_loader,optimizer,n_epochs,device='cpu',save_path=None):
-	train_losses = []
-	vali_losses = []
-	for epoch in range(n_epochs):
-		train_loss = train_conv(model,train_loader,optimizer,epoch,device=device)
-		vali_loss,_,_ = test_conv(model,vali_loader,device=device)
-		train_losses.append(train_loss)
-		vali_losses.append(vali_loss)
-		if save_path is not None:
-			if not os.path.exists(save_path):
-				os.makedirs(save_path)
-				print('Directory created:', save_path)
-			torch.save(model.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-			print('Weights saved.')
-	np.save(save_path + 'all_train_losses.npy', train_losses)
-	np.save(save_path + 'all_vali_losses.npy', vali_losses)
-	return train_losses, vali_losses
+def train_vali_all_epochs_conv(model,train_loader,vali_loader,optimizer,n_epochs,device='cpu',save_path=None,save=True):
+    train_losses = []
+    vali_losses = []
+
+    # Handle both int and tuple input (for continued training)
+    if isinstance(n_epochs, tuple):
+        epoch_range = range(*n_epochs)
+    else:
+        epoch_range = range(n_epochs)
+
+    for epoch in epoch_range:
+        train_loss = train_conv(model,train_loader,optimizer,epoch,device=device)
+        vali_loss,_,_ = test_conv(model,vali_loader,device=device)
+        train_losses.append(train_loss)
+        vali_losses.append(vali_loss)
+        if save_path is not None:
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+                print('Directory created:', save_path)
+            torch.save(model.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+            print('Weights saved.')
+
+    if save:
+        np.save(save_path + 'all_train_losses.npy', train_losses)
+        np.save(save_path + 'all_vali_losses.npy', vali_losses)
+
+    return train_losses, vali_losses
 
 
 def dev_train_vali_all_epochs_conv(model,size_ls,train_loader,vali_loader,optimizer,n_epochs,device='cpu',save_path=None,manner='naiv'):
-	if save_path is None:
-		save_path = './'
-	else:
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
-			print('Directory created:', save_path)
-	train_losses = []
-	vali_losses = []
-	size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
-	np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
-	print(size_each_epoch)
-	for epoch in range(n_epochs):
-		new_size = size_each_epoch[epoch]
-		print('new size:',new_size)
-		# Create new autoencoder with corresponding bottleneck size.
-		if epoch == 0:
-			ae = ConvAutoencoder(size_each_epoch[epoch])
-		else:
-			ae = develope_convAE(new_size,save_path=save_path,epoch=epoch,manner=manner)
-			optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
-			
-		train_loss = train_conv(ae,train_loader,optimizer,epoch,device=device)
-		vali_loss,_,_ = test_conv(ae,vali_loader,device=device)
-		train_losses.append(train_loss)
-		vali_losses.append(vali_loss)
+    if save_path is None:
+        save_path = './'
+    else:
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+            print('Directory created:', save_path)
+    train_losses = []
+    vali_losses = []
+    size_each_epoch = size_per_epoch(size_ls,n_epochs,type='step')
+    np.save(save_path + 'size_each_epoch.npy',size_each_epoch)
+    print(size_each_epoch)
+    for epoch in range(n_epochs):
+        new_size = size_each_epoch[epoch]
+        print('new size:',new_size)
+        # Create new autoencoder with corresponding bottleneck size.
+        if epoch == 0:
+            ae = ConvAutoencoder(size_each_epoch[epoch])
+        else:
+            ae = develope_convAE(new_size,save_path=save_path,epoch=epoch,manner=manner)
+            optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
+            
+        train_loss = train_conv(ae,train_loader,optimizer,epoch,device=device)
+        vali_loss,_,_ = test_conv(ae,vali_loader,device=device)
+        train_losses.append(train_loss)
+        vali_losses.append(vali_loss)
 
-		# Save the weights of the last epoch.
-		torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-		print('Weights saved.')
-	np.save(save_path + 'all_train_losses.npy',train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
+        # Save the weights of the last epoch.
+        torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+        print('Weights saved.')
+    np.save(save_path + 'all_train_losses.npy', train_losses)
+    np.save(save_path + 'all_vali_losses.npy', vali_losses)
+    print('All train losses saved.')
+    return train_losses, vali_losses
+
+
+def train_vali_all_epochs_with_bottleneck_freeze(
+    model,
+    train_loader,
+    validation_loader,
+    device,
+    save_path,
+    total_epochs=60,
+    freeze_epochs=10,
+    lr=0.1,
+    momentum=0.9,
+):
+    # Freeze the encoder -> bottleneck layer
+    frozen_params = list(model.encoder[-1].parameters())
+    for p in frozen_params:
+        p.requires_grad = False
+
+    # Build optimizer excluding frozen params
+    trainable_params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.SGD(trainable_params, lr=lr, momentum=momentum)
+
+    # Train for frozen_epochs
+    train_loss_1, vali_loss_1 = train_vali_all_epochs_conv(
+        model, 
+        train_loader, 
+        validation_loader, 
+        optimizer, 
+        freeze_epochs, 
+        device, 
+        save_path + '/',
+        save=False,
+    )
+
+    # Unfreeze the layer
+    for p in model.encoder[-1].parameters():
+        p.requires_grad = True
+
+    # Add unfrozen params to the optimizer
+    optimizer.add_param_group({'params': frozen_params, 'lr': lr, 'momentum': momentum})
+
+    # Train remaining epochs
+    train_loss_2, vali_loss_2 = train_vali_all_epochs_conv(
+        model, 
+        train_loader, 
+        validation_loader, 
+        optimizer, 
+        (freeze_epochs, total_epochs), 
+        device, 
+        save_path + '/',
+        save=False,
+    )
+
+    # Concatenate losses
+    train_loss = np.concatenate([train_loss_1, train_loss_2])
+    vali_loss = np.concatenate([vali_loss_1, vali_loss_2])
+
+    np.save(os.path.join(save_path, 'all_train_losses.npy'), train_loss)
+    np.save(os.path.join(save_path, 'all_vali_losses.npy'), vali_loss)
+
+    return train_loss, vali_loss
+
+
+@torch.no_grad()
+def initialize_with_feature_pca(model, dataloader, device, n_components=128):
+    """
+    Fit PCA on the inputs to the encoder's last linear layer and
+    initialize the encoder's last linear with PCA weights and bias.
+    """
+    model.eval()
+    last_linear = model.encoder[-1]
+
+    # Collect inputs to the last linear (flattened 1024-d features)
+    feats = []
+    def hook(module, inputs, output):
+        x = inputs[0].detach()  # shape [B, 1024]
+        feats.append(x.cpu())
+
+    handle = last_linear.register_forward_hook(hook)
+
+    for x, _ in dataloader:
+        x = x.to(device, non_blocking=True)
+        _ = model.encoder(x)  # run encoder to trigger the hook
+
+    handle.remove()
+    features = torch.cat(feats, dim=0).numpy().astype('float32')
+
+    # PCA on encoder features: svd_solver="randomized" for large datasets
+    pca = PCA(n_components=n_components, svd_solver="randomized")
+    pca.fit(features)
+
+    # Set encoder last linear to compute PCA scores
+    W_enc = torch.from_numpy(pca.components_.astype('float32')).to(device=device, dtype=last_linear.weight.dtype)
+    mu = torch.from_numpy(pca.mean_.astype('float32')).to(device=device, dtype=last_linear.weight.dtype)
+    b_enc = -W_enc @ mu  # implement centering: y = W(x - mu)
+
+    assert W_enc.shape == last_linear.weight.shape, f"{W_enc.shape} vs {last_linear.weight.shape}"
+    last_linear.weight.copy_(W_enc)
+    last_linear.bias.copy_(b_enc)
+
+    return model
+
+
+def initialize_conv_sae_with_pca(latent_dim, device, train_loader):
+    sae_model = ConvAutoencoder(latent_dim=latent_dim).to(device)
+    initialize_with_feature_pca(sae_model, train_loader, device, n_components=latent_dim)
+    sae_optimizer = torch.optim.SGD(sae_model.parameters(), lr=0.1, momentum=0.9)
+    return sae_model, sae_optimizer
+
 
 
 def train_vae(model,train_loader,optimizer,epoch):
-	model.train()
-	train_loss = 0
+    model.train()
+    train_loss = 0
 
-	pbar = tqdm(enumerate(train_loader),total=len(train_loader))
-	for batch_idx, (data, target) in pbar:
-		data = Variable(data)
-		optimizer.zero_grad()
-		# print('debug data shape',data.shape)
-		batch_size = data.size()[0]
-		input = data.view(batch_size,-1)
-		decoded, mu, logvar = model(input)
-		# print('debug decoded shape',decoded.shape)
-		# print('debug encoded shape',encoded.shape)
-		loss = F.mse_loss(decoded, input)
-		loss.backward()
-		train_loss += loss.item()
-		optimizer.step()
-		pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-			epoch, batch_idx * len(data), len(train_loader.dataset),
-			100. * batch_idx / len(train_loader),
-			loss.item() / len(data)))
-	train_loss /= len(train_loader)
-	print('====> Epoch: {} Average loss: {:.4f}'.format(
-		epoch, train_loss))
-	return train_loss
+    pbar = tqdm(enumerate(train_loader),total=len(train_loader))
+    for batch_idx, (data, target) in pbar:
+        data = Variable(data)
+        optimizer.zero_grad()
+        # print('debug data shape',data.shape)
+        batch_size = data.size()[0]
+        input = data.view(batch_size,-1)
+        decoded, mu, logvar = model(input)
+        # print('debug decoded shape',decoded.shape)
+        # print('debug encoded shape',encoded.shape)
+        loss = F.mse_loss(decoded, input)
+        loss.backward()
+        train_loss += loss.item()
+        optimizer.step()
+        pbar.set_description('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            epoch, batch_idx * len(data), len(train_loader.dataset),
+            100. * batch_idx / len(train_loader),
+            loss.item() / len(data)))
+    train_loss /= len(train_loader)
+    print('====> Epoch: {} Average loss: {:.4f}'.format(
+        epoch, train_loss))
+    return train_loss
 
 def test_vae(model,test_loader,device='cpu'):
-	model.eval()
-	test_loss = 0
-	for data, _ in test_loader:
-		with torch.no_grad():
-			input = data.view(data.size(0), -1).to(device)
-			decoded, mu, logvar = model(input)
-			test_loss += F.mse_loss(decoded, input, size_average=False).item()
-	test_loss /= len(test_loader)
-	print('====> Test set loss: {:.4f}'.format(test_loss))
-	return test_loss, decoded,data
+    model.eval()
+    test_loss = 0
+    for data, _ in test_loader:
+        with torch.no_grad():
+            input = data.view(data.size(0), -1).to(device)
+            decoded, mu, logvar = model(input)
+            test_loss += F.mse_loss(decoded, input, size_average=False).item()
+    test_loss /= len(test_loader)
+    print('====> Test set loss: {:.4f}'.format(test_loss))
+    return test_loss, decoded,data
 
 
 def develope_dSpriteAE(new_size, save_path, epoch, manner='naiv'):
-	"""
-	Develop a dSprites autoencoder with increased latent dimension.
-	This is similar to develope_convAE but specifically for dSpriteAutoencoder.
-	"""
-	from autoencoder import dSpriteAutoencoder
-	
-	# Create new autoencoder with corresponding bottleneck size
-	autoencoder = dSpriteAutoencoder(new_size)
+    """
+    Develop a dSprites autoencoder with increased latent dimension.
+    This is similar to develope_convAE but specifically for dSpriteAutoencoder.
+    """
+    from autoencoder import dSpriteAutoencoder
+    
+    # Create new autoencoder with corresponding bottleneck size
+    autoencoder = dSpriteAutoencoder(new_size)
 
-	# Load the weights learned in the last epoch
-	state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
-	
-	# For simplified dSprites autoencoder, the final linear layer in encoder is at index 7
-	# and the first linear layer in decoder is at index 0
-	encoder_linear_key = "encoder.7.weight"  # Final layer of encoder (after Flatten at index 6)
-	encoder_bias_key = "encoder.7.bias"
-	decoder_linear_key = "linear.0.weight"    # First layer after latent
-	
-	if encoder_linear_key not in state_dict:
-		# Find the correct key for the final encoder layer
-		print("Available keys in state_dict:")
-		for key in state_dict.keys():
-			print(f"  {key}: {state_dict[key].shape}")
-		# Try to find the encoder linear layer
-		for key in state_dict.keys():
-			if 'encoder' in key and 'weight' in key and len(state_dict[key].shape) == 2:
-				encoder_linear_key = key
-				encoder_bias_key = key.replace('weight', 'bias')
-				break
-	
-	num_weights = state_dict[encoder_linear_key].size(1)
-	
-	# Use different manners to determine the new weights
-	if manner == 'naiv':
-		new_weights_encoder = torch.randn(new_size, num_weights)
-		new_bias_encoder = torch.randn(new_size)
-		new_weights_decoder = torch.randn(num_weights, new_size)
-	elif manner == 'cell_division':
-		new_weights_encoder = divide_enc_tensor(state_dict[encoder_linear_key], new_size)
-		new_bias_encoder = divide_latent_tensor(state_dict[encoder_bias_key], new_size)
-		new_weights_decoder = divide_latent_tensor(state_dict[decoder_linear_key].T, new_size).T
-	elif manner == 'gaussian':
-		# Use gaussian extension for smoother weight growth
-		new_weights_encoder = extend_tensor_with_noise(state_dict[encoder_linear_key], new_size, dim=0)
-		new_bias_encoder = extend_tensor_with_noise(state_dict[encoder_bias_key], new_size, dim=0)
-		new_weights_decoder = extend_tensor_with_noise(state_dict[decoder_linear_key], new_size, dim=1)
-		
-	# Use the new weights to update the state_dict
-	state_dict[encoder_linear_key] = new_weights_encoder
-	state_dict[encoder_bias_key] = new_bias_encoder
-	state_dict[decoder_linear_key] = new_weights_decoder
-	
-	# Debug checks for NaN values
-	print('debug nan in encoder weights', torch.isnan(state_dict[encoder_linear_key]).sum())
-	print('debug nan in encoder bias', torch.isnan(state_dict[encoder_bias_key]).sum())
-	print('debug nan in decoder weights', torch.isnan(state_dict[decoder_linear_key]).sum())
-	
-	# Load the state dict into the model
-	autoencoder.load_state_dict(state_dict)
+    # Load the weights learned in the last epoch
+    state_dict = torch.load(save_path + 'model_weights_epoch{}.pth'.format(epoch-1))
+    
+    # For simplified dSprites autoencoder, the final linear layer in encoder is at index 7
+    # and the first linear layer in decoder is at index 0
+    encoder_linear_key = "encoder.7.weight"  # Final layer of encoder (after Flatten at index 6)
+    encoder_bias_key = "encoder.7.bias"
+    decoder_linear_key = "linear.0.weight"    # First layer after latent
+    
+    if encoder_linear_key not in state_dict:
+        # Find the correct key for the final encoder layer
+        print("Available keys in state_dict:")
+        for key in state_dict.keys():
+            print(f"  {key}: {state_dict[key].shape}")
+        # Try to find the encoder linear layer
+        for key in state_dict.keys():
+            if 'encoder' in key and 'weight' in key and len(state_dict[key].shape) == 2:
+                encoder_linear_key = key
+                encoder_bias_key = key.replace('weight', 'bias')
+                break
+    
+    num_weights = state_dict[encoder_linear_key].size(1)
+    
+    # Use different manners to determine the new weights
+    if manner == 'naiv':
+        new_weights_encoder = torch.randn(new_size, num_weights)
+        new_bias_encoder = torch.randn(new_size)
+        new_weights_decoder = torch.randn(num_weights, new_size)
+    elif manner == 'cell_division':
+        new_weights_encoder = divide_enc_tensor(state_dict[encoder_linear_key], new_size)
+        new_bias_encoder = divide_latent_tensor(state_dict[encoder_bias_key], new_size)
+        new_weights_decoder = divide_latent_tensor(state_dict[decoder_linear_key].T, new_size).T
+    elif manner == 'gaussian':
+        # Use gaussian extension for smoother weight growth
+        new_weights_encoder = extend_tensor_with_noise(state_dict[encoder_linear_key], new_size, dim=0)
+        new_bias_encoder = extend_tensor_with_noise(state_dict[encoder_bias_key], new_size, dim=0)
+        new_weights_decoder = extend_tensor_with_noise(state_dict[decoder_linear_key], new_size, dim=1)
+        
+    # Use the new weights to update the state_dict
+    state_dict[encoder_linear_key] = new_weights_encoder
+    state_dict[encoder_bias_key] = new_bias_encoder
+    state_dict[decoder_linear_key] = new_weights_decoder
+    
+    # Debug checks for NaN values
+    print('debug nan in encoder weights', torch.isnan(state_dict[encoder_linear_key]).sum())
+    print('debug nan in encoder bias', torch.isnan(state_dict[encoder_bias_key]).sum())
+    print('debug nan in decoder weights', torch.isnan(state_dict[decoder_linear_key]).sum())
+    
+    # Load the state dict into the model
+    autoencoder.load_state_dict(state_dict)
 
-	return autoencoder
+    return autoencoder
 
 
 def dev_train_vali_all_epochs_dSprite(model, size_ls, train_loader, vali_loader, optimizer, n_epochs, device='cpu', save_path=None, manner='gaussian'):
-	"""
-	Train a developing dSprites autoencoder with growing bottleneck size
-	"""
-	from autoencoder import dSpriteAutoencoder
-	
-	if save_path is None:
-		save_path = './'
-	else:
-		if not os.path.exists(save_path):
-			os.makedirs(save_path)
-			print('Directory created:', save_path)
-	
-	train_losses = []
-	vali_losses = []
-	size_each_epoch = size_ls  # Use the size list directly
-	np.save(save_path + 'size_each_epoch.npy', size_each_epoch)
-	print(f"Size schedule: {size_each_epoch}")
-	
-	current_bottleneck_size = None
-	ae = None
-	
-	for epoch in range(n_epochs):
-		new_size = size_each_epoch[epoch]
-		print(f'Epoch {epoch}, new size: {new_size}')
-		
-		# Only reinitialize autoencoder and optimizer when the bottleneck size changes
-		if new_size != current_bottleneck_size or ae is None:
-			current_bottleneck_size = new_size
-			
-			if epoch == 0:
-				ae = dSpriteAutoencoder(new_size).to(device)
-			else:
-				ae = develope_dSpriteAE(new_size, save_path=save_path, epoch=epoch, manner=manner)
-				ae = ae.to(device)
-			
-			optimizer = torch.optim.SGD(ae.parameters(), lr=0.1, momentum=0.9)
-		
-		train_loss = train_conv(ae, train_loader, optimizer, epoch, device=device)
-		vali_loss, _, _ = test_conv(ae, vali_loader, device=device)
-		train_losses.append(train_loss)
-		vali_losses.append(vali_loss)
+    """
+    Train a developing dSprites autoencoder with growing bottleneck size
+    """
+    from autoencoder import dSpriteAutoencoder
+    
+    if save_path is None:
+        save_path = './'
+    else:
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+            print('Directory created:', save_path)
+    
+    train_losses = []
+    vali_losses = []
+    size_each_epoch = size_ls  # Use the size list directly
+    np.save(save_path + 'size_each_epoch.npy', size_each_epoch)
+    print(f"Size schedule: {size_each_epoch}")
+    
+    current_bottleneck_size = None
+    ae = None
+    
+    for epoch in range(n_epochs):
+        new_size = size_each_epoch[epoch]
+        print(f'Epoch {epoch}, new size: {new_size}')
+        
+        # Only reinitialize autoencoder and optimizer when the bottleneck size changes
+        if new_size != current_bottleneck_size or ae is None:
+            current_bottleneck_size = new_size
+            
+            if epoch == 0:
+                ae = dSpriteAutoencoder(new_size).to(device)
+            else:
+                ae = develope_dSpriteAE(new_size, save_path=save_path, epoch=epoch, manner=manner)
+                ae = ae.to(device)
+            
+            optimizer = torch.optim.SGD(ae.parameters(), lr=0.1, momentum=0.9)
+        
+        train_loss = train_conv(ae, train_loader, optimizer, epoch, device=device)
+        vali_loss, _, _ = test_conv(ae, vali_loader, device=device)
+        train_losses.append(train_loss)
+        vali_losses.append(vali_loss)
 
-		# Save the weights of the current epoch
-		torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
-		print('Weights saved.')
-	
-	np.save(save_path + 'all_train_losses.npy', train_losses)
-	print('All train losses saved.')
-	return train_losses, vali_losses
+        # Save the weights of the current epoch
+        torch.save(ae.state_dict(), save_path + 'model_weights_epoch{}.pth'.format(epoch))
+        print('Weights saved.')
+    
+    np.save(save_path + 'all_train_losses.npy', train_losses)
+    print('All train losses saved.')
+    return train_losses, vali_losses

@@ -6,12 +6,12 @@ import torch
 from tqdm import tqdm
 from model_utils import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11
+# })
 
 
 #Author: Francesco Mottes
@@ -138,7 +138,7 @@ def calculate_dimensionality_for_single_model(model_idx, model_type, test_images
 
 
 def compute_dimensionality_matrix(model_type, dataset='mnist', size_ls=None, num_models=10, num_epochs=60, base_path='/home/david/'):
-    result_file = f"Results/{dataset}_{model_type}_dimensionality.npy"
+    result_file = f"paper_results/{dataset}_{model_type}_dimensionality.npy"
 
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
@@ -160,8 +160,8 @@ def compute_dimensionality_matrix(model_type, dataset='mnist', size_ls=None, num
 
 
 def plot_dimensionality_comparison(dataset):
-    sae_file = f"Results/{dataset}_sae_dimensionality.npy"
-    dae_file = f"Results/{dataset}_dae_dimensionality.npy"
+    sae_file = f"results_paper/{dataset}_sae_dimensionality.npy"
+    dae_file = f"results_paper/{dataset}_dae_dimensionality.npy"
     if not os.path.exists(sae_file) or not os.path.exists(dae_file):
         print(f"Results files not found.")
         return
@@ -193,10 +193,8 @@ def plot_dimensionality_comparison(dataset):
 
     plt.tight_layout()
     
-    plt.savefig(f"Results/figures/png/{dataset}_dimensionality_comparison.png", dpi=300, bbox_inches='tight')
-    plt.savefig(f"Results/figures/svg/{dataset}_dimensionality_comparison.svg", bbox_inches='tight')
-    plt.savefig(f"Results/figures/eps/{dataset}_dimensionality_comparison.eps", bbox_inches='tight')
-    plt.savefig(f"Results/figures/pdf/{dataset}_dimensionality_comparison.pdf", bbox_inches='tight')
+    plt.savefig(f"results_paper/figures/png/{dataset}_dimensionality_comparison.png", dpi=300, bbox_inches='tight')
+    plt.savefig(f"results_paper/figures/pdf/{dataset}_dimensionality_comparison.pdf", bbox_inches='tight')
     plt.close()
 
 

@@ -6,12 +6,12 @@ from autoencoder import *
 from model_utils import *
 from solver import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11
+# })
 
 def plot_reconstructions(dataset="mnist", base_path="/home/david/", iteration=0, num_examples=5, save_path="Results/figures/"):
     """

@@ -13,12 +13,12 @@ from autoencoder import *
 from model_utils import *
 from solver import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11
+# })
 
 
 def add_noise_and_reconstruct(test_images, noise_scale, dataset="mnist", n_components=None, start_noise_idx=0, end_noise_idx=4):
@@ -136,7 +136,7 @@ def get_encoding_diff(model, original_img, noisy_img, dataset="mnist") -> np.nda
     return np.abs((original_encoding - noisy_encoding).detach().numpy())
 
 
-def evaluate_models(test_images, reconstructed_images, sae, dae, dataset="mnist"):
+def evaluate_models(test_images, reconstructed_images, sae, pca_ae, dae, dataset="mnist"):
     """
     Evaluate models by measuring encoding differences between original and noisy images.
     
@@ -151,6 +151,7 @@ def evaluate_models(test_images, reconstructed_images, sae, dae, dataset="mnist"
         Tuple of mean SAE and DAE differences
     """
     sae_diffs = []
+    pca_diffs = []
     dae_diffs = []
     
     for i in range(len(test_images)):
@@ -159,12 +160,14 @@ def evaluate_models(test_images, reconstructed_images, sae, dae, dataset="mnist"
         
         with torch.no_grad():
             sae_diff = get_encoding_diff(sae, test_image, reconstructed_image, dataset)
+            pca_diff = get_encoding_diff(pca_ae, test_image, reconstructed_image, dataset)
             dae_diff = get_encoding_diff(dae, test_image, reconstructed_image, dataset)
 
             sae_diffs.append(sae_diff)
+            pca_diffs.append(pca_diff)
             dae_diffs.append(dae_diff)
     
-    return np.mean(np.vstack(sae_diffs), axis=0), np.mean(np.vstack(dae_diffs), axis=0)
+    return np.mean(np.vstack(sae_diffs), axis=0), np.mean(np.vstack(pca_diffs), axis=0), np.mean(np.vstack(dae_diffs), axis=0)
 
 
 def plot_neuron_comparison(results, manipulated_neurons, savepath, dataset="mnist", method="noise"):
@@ -247,7 +250,7 @@ def compute_pc_noise_analysis(num_models, manipulated_neurons, dataset="mnist", 
         dataset: Dataset ('mnist' or 'cifar')
         base_path: Base path to the model directory
     """
-    result_file = f"Results/{dataset}_pc_noise.npy"
+    result_file = f"paper_results/{dataset}_pc_noise.npy"
 
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
@@ -281,12 +284,13 @@ def compute_pc_noise_analysis(num_models, manipulated_neurons, dataset="mnist", 
             else:
                 model_path = f"{base_path}cifar_models/"
                 sae = load_conv_model(f"{model_path}sae/{iteration}", 'sae', 59)
-                dae = load_conv_model(f"{model_path}dae/{iteration}", 'sae', 59, size_ls=[128]*60)
+                pca_ae = load_conv_model(f"{model_path}pca-ae/{iteration}", 'pca-ae', 59)
+                dae = load_conv_model(f"{model_path}dev-ae/{iteration}", 'dev-ae', 59, size_ls=[128]*60)
             
             # Evaluate models
-            sae_diffs, dae_diffs = evaluate_models(test_images, noisy_reconstructed, sae, dae, dataset)
-            results[neuron_pair].append((sae_diffs, dae_diffs))
-    
+            sae_diffs, pca_diffs, dae_diffs = evaluate_models(test_images, noisy_reconstructed, sae, pca_ae, dae, dataset)
+            results[neuron_pair].append((sae_diffs, pca_diffs, dae_diffs))
+
     np.save(result_file, results)
     return results
 

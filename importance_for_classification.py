@@ -10,13 +10,13 @@ from autoencoder import *
 from model_utils import *
 from solver import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11,
-    'axes.titlesize': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11,
+#     'axes.titlesize': 11
+# })
 
 
 def encode_dataset(model, dataset_images, dataset="mnist"):
@@ -98,26 +98,32 @@ def analyze_model_features(model_index, dataset, base_path, images, labels):
     if dataset.lower() == "mnist":
         model_path = f'{base_path}mnist_models/'
         sae = load_model(f"{model_path}sae/{model_index}", 'sae', 59)
+        pca_ae = load_model(f"{model_path}pca-ae/{model_index}", 'pca-ae', 59)
         dae = load_model(f"{model_path}dae/{model_index}", 'dae', 59)
     else:
         model_path = f"{base_path}cifar_models/"
         sae = load_conv_model(f"{model_path}sae/{model_index}", 'sae', 59)
-        dae = load_conv_model(f"{model_path}dae/{model_index}", 'dae', 59, size_ls=[128]*60)
+        pca_ae = load_conv_model(f"{model_path}pca-ae/{model_index}", 'pca-ae', 59, size_ls=[128]*60)
+        dae = load_conv_model(f"{model_path}dev-ae/{model_index}", 'dev-ae', 59, size_ls=[128]*60)
         
     sae_train_encodings = encode_dataset(sae, images, dataset)
+    pca_ae_train_encodings = encode_dataset(pca_ae, images, dataset)
     dae_train_encodings = encode_dataset(dae, images, dataset)
     
     sae_classifier = LogisticRegression(max_iter=3000)
+    pca_ae_classifier = LogisticRegression(max_iter=3000)
     dae_classifier = LogisticRegression(max_iter=3000)
     
     sae_classifier.fit(sae_train_encodings, labels)
+    pca_ae_classifier.fit(pca_ae_train_encodings, labels)
     dae_classifier.fit(dae_train_encodings, labels)
     
     # Extract neuron importance
     sae_importance = get_neuron_importance(sae_classifier)
+    pca_ae_importance = get_neuron_importance(pca_ae_classifier)
     dae_importance = get_neuron_importance(dae_classifier)
     
-    return sae_importance, dae_importance
+    return sae_importance, pca_ae_importance, dae_importance
 
 
 def plot_grouped_importance(sae_importance, dae_importance, neuron_groups, dataset="mnist"):
@@ -185,7 +191,7 @@ def compute_neuron_importance(num_models, dataset="mnist", base_path="/home/davi
         base_path: Base path to the model directory
     """
     # Results file for average
-    result_file = f"Results/{dataset}_neuron_importance.npy"
+    result_file = f"paper_results/{dataset}_neuron_importance.npy"
     
     # Check if average results already exist
     if os.path.exists(result_file):
@@ -193,33 +199,40 @@ def compute_neuron_importance(num_models, dataset="mnist", base_path="/home/davi
         avg_results = np.load(result_file, allow_pickle=True).item()
     else:
         all_sae_importance = []
+        all_pca_ae_importance = []
         all_dae_importance = []
         all_sae_group_importance = []
+        all_pca_ae_group_importance = []
         all_dae_group_importance = []
 
         images, labels = load_cifar_list() if dataset.lower() == "cifar" else load_mnist_list()
         
         # Find importance for each model
         for i in tqdm(range(num_models), desc=f"Processing models"):
-            sae_importance, dae_importance = analyze_model_features(
+            sae_importance, pca_ae_importance, dae_importance = analyze_model_features(
                 i, dataset, base_path, images, labels
             )
                 
             all_sae_importance.append(sae_importance)
+            all_pca_ae_importance.append(pca_ae_importance)
             all_dae_importance.append(dae_importance)
             
             # Calculate group importance for each model
             if neuron_groups is not None:
                 sae_group_imp = get_neuron_group_importance(sae_importance, neuron_groups)
+                pca_ae_group_imp = get_neuron_group_importance(pca_ae_importance, neuron_groups)
                 dae_group_imp = get_neuron_group_importance(dae_importance, neuron_groups)
                 all_sae_group_importance.append(sae_group_imp)
+                all_pca_ae_group_importance.append(pca_ae_group_imp)
                 all_dae_group_importance.append(dae_group_imp)
         
         avg_sae_importance = np.mean(all_sae_importance, axis=0)
+        avg_pca_ae_importance = np.mean(all_pca_ae_importance, axis=0)
         avg_dae_importance = np.mean(all_dae_importance, axis=0)
         
         avg_results = {
             'sae_importance': avg_sae_importance,
+            'pca_ae_importance': avg_pca_ae_importance,
             'dae_importance': avg_dae_importance,
             'neuron_groups': neuron_groups,
             'num_models': num_models
@@ -227,6 +240,7 @@ def compute_neuron_importance(num_models, dataset="mnist", base_path="/home/davi
         
         if neuron_groups is not None and len(all_sae_group_importance) > 0:
             avg_results['all_sae_group_importance'] = all_sae_group_importance
+            avg_results['all_pca_ae_group_importance'] = all_pca_ae_group_importance
             avg_results['all_dae_group_importance'] = all_dae_group_importance
         
         np.save(result_file, avg_results)

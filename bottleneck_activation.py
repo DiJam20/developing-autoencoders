@@ -8,12 +8,12 @@ from autoencoder import *
 from model_utils import *
 from solver import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11
+# })
 
 
 def get_bottleneck_activation(model, img: torch.Tensor) -> np.ndarray:
@@ -34,7 +34,7 @@ def get_bottleneck_activation(model, img: torch.Tensor) -> np.ndarray:
     return original_encoding.detach().numpy()    
 
 
-def evaluate_models(test_images: np.ndarray, sae, dae) -> tuple:
+def evaluate_models(test_images: np.ndarray, sae, pca, dae) -> tuple:
     """
     Evaluate the models by calculating the percentage of zeros for each neuron
     and the mean of non-zero activations for each neuron.
@@ -49,18 +49,23 @@ def evaluate_models(test_images: np.ndarray, sae, dae) -> tuple:
     """
     # Per neuron statistics for zeros tracking
     sae_zeros = None
+    pca_zeros = None
     dae_zeros = None
     
     # For tracking non-zero activations
     sae_nonzero_counts = None
+    pca_nonzero_counts = None
     dae_nonzero_counts = None
     sae_nonzero_sum = None
+    pca_nonzero_sum = None
     dae_nonzero_sum = None
 
     # Per image statistics
     sae_per_image_zeros = []
+    pca_per_image_zeros = []
     dae_per_image_zeros = []
     sae_per_image_nonzero_mean = []
+    pca_per_image_nonzero_mean = []
     dae_per_image_nonzero_mean = []
 
     num_images = 0
@@ -75,65 +80,84 @@ def evaluate_models(test_images: np.ndarray, sae, dae) -> tuple:
         
         with torch.no_grad():
             sae_activations = get_bottleneck_activation(sae, test_image)
+            pca_activations = get_bottleneck_activation(pca, test_image)
             dae_activations = get_bottleneck_activation(dae, test_image)
 
             if sae_zeros is None:
                 sae_zeros = np.zeros_like(sae_activations)
+                pca_zeros = np.zeros_like(pca_activations)
                 dae_zeros = np.zeros_like(dae_activations)
                 sae_nonzero_counts = np.zeros_like(sae_activations)
+                pca_nonzero_counts = np.zeros_like(pca_activations)
                 dae_nonzero_counts = np.zeros_like(dae_activations)
                 sae_nonzero_sum = np.zeros_like(sae_activations)
+                pca_nonzero_sum = np.zeros_like(pca_activations)
                 dae_nonzero_sum = np.zeros_like(dae_activations)
             
             # Count zeros
             sae_is_zero = (np.abs(sae_activations) <= threshold)
+            pca_is_zero = (np.abs(pca_activations) <= threshold)
             dae_is_zero = (np.abs(dae_activations) <= threshold)
             sae_zeros += sae_is_zero
+            pca_zeros += pca_is_zero
             dae_zeros += dae_is_zero
             
             # Count and sum non-zero activations
             sae_nonzero_counts += ~sae_is_zero
+            pca_nonzero_counts += ~pca_is_zero
             dae_nonzero_counts += ~dae_is_zero
             sae_nonzero_sum += np.where(sae_is_zero, 0, np.abs(sae_activations))
+            pca_nonzero_sum += np.where(pca_is_zero, 0, np.abs(pca_activations))
             dae_nonzero_sum += np.where(dae_is_zero, 0, np.abs(dae_activations))
 
             # Percentage of zeros for this image
             sae_per_image_zeros.append(np.mean(sae_is_zero) * 100)
+            pca_per_image_zeros.append(np.mean(pca_is_zero) * 100)
             dae_per_image_zeros.append(np.mean(dae_is_zero) * 100)
             
             flat_sae_activations = np.abs(sae_activations).reshape(-1)
+            flat_pca_activations = np.abs(pca_activations).reshape(-1)
             flat_dae_activations = np.abs(dae_activations).reshape(-1)
             flat_sae_is_zero = sae_is_zero.reshape(-1)
+            flat_pca_is_zero = pca_is_zero.reshape(-1)
             flat_dae_is_zero = dae_is_zero.reshape(-1)
             
             # Mean of non-zero activations for this image
             nonzero_sae_values = flat_sae_activations[~flat_sae_is_zero] if flat_sae_is_zero.any() else flat_sae_activations
+            nonzero_pca_values = flat_pca_activations[~flat_pca_is_zero] if flat_pca_is_zero.any() else flat_pca_activations
             nonzero_dae_values = flat_dae_activations[~flat_dae_is_zero] if flat_dae_is_zero.any() else flat_dae_activations
             
             sae_per_image_nonzero_mean.append(np.mean(nonzero_sae_values) if len(nonzero_sae_values) > 0 else 0)
+            pca_per_image_nonzero_mean.append(np.mean(nonzero_pca_values) if len(nonzero_pca_values) > 0 else 0)
             dae_per_image_nonzero_mean.append(np.mean(nonzero_dae_values) if len(nonzero_dae_values) > 0 else 0)
 
     # Per neuron statistics
     sae_zeros_percent = (sae_zeros / num_images) * 100
+    pca_zeros_percent = (pca_zeros / num_images) * 100
     dae_zeros_percent = (dae_zeros / num_images) * 100
     
     # Mean of non-zero activations for each neuron
     sae_nonzero_mean = np.divide(sae_nonzero_sum, sae_nonzero_counts, 
                                 out=np.zeros_like(sae_nonzero_sum), 
                                 where=sae_nonzero_counts > 0)
+    pca_nonzero_mean = np.divide(pca_nonzero_sum, pca_nonzero_counts, 
+                                out=np.zeros_like(pca_nonzero_sum), 
+                                where=pca_nonzero_counts > 0)
     dae_nonzero_mean = np.divide(dae_nonzero_sum, dae_nonzero_counts, 
                                 out=np.zeros_like(dae_nonzero_sum), 
                                 where=dae_nonzero_counts > 0)
 
     sae_per_image_zeros = np.array(sae_per_image_zeros)
+    pca_per_image_zeros = np.array(pca_per_image_zeros)
     dae_per_image_zeros = np.array(dae_per_image_zeros)
     sae_per_image_nonzero_mean = np.array(sae_per_image_nonzero_mean)
+    pca_per_image_nonzero_mean = np.array(pca_per_image_nonzero_mean)
     dae_per_image_nonzero_mean = np.array(dae_per_image_nonzero_mean)
     
-    return (sae_zeros_percent, dae_zeros_percent,
-            sae_per_image_zeros, dae_per_image_zeros,
-            sae_nonzero_mean, dae_nonzero_mean,
-            sae_per_image_nonzero_mean, dae_per_image_nonzero_mean)
+    return (sae_zeros_percent, pca_zeros_percent, dae_zeros_percent,
+            sae_per_image_zeros, pca_per_image_zeros, dae_per_image_zeros,
+            sae_nonzero_mean, pca_nonzero_mean, dae_nonzero_mean,
+            sae_per_image_nonzero_mean, pca_per_image_nonzero_mean, dae_per_image_nonzero_mean)
 
 
 def compute_bottleneck_activation(num_models: int, dataset: str, base_path: str):
@@ -150,7 +174,7 @@ def compute_bottleneck_activation(num_models: int, dataset: str, base_path: str)
     elif dataset.lower() == "cifar":
         model_path = f"{base_path}cifar_models/"
     
-    result_file = f"Results/{dataset}_bottleneck_activation.npy"
+    result_file = f"paper_results/{dataset}_bottleneck_activation.npy"
 
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
@@ -164,14 +188,18 @@ def compute_bottleneck_activation(num_models: int, dataset: str, base_path: str)
 
     # Per neuron statistics
     all_sae_zeros = []
+    all_pca_zeros = []
     all_dae_zeros = []
     all_sae_nonzero_means = []
+    all_pca_nonzero_means = []
     all_dae_nonzero_means = []
 
     # Per image statistics
     all_sae_per_image_zeros = []
+    all_pca_per_image_zeros = []
     all_dae_per_image_zeros = []
     all_sae_per_image_nonzero_means = []
+    all_pca_per_image_nonzero_means = []
     all_dae_per_image_nonzero_means = []
 
     for iteration in tqdm(range(num_models), desc=f"Evaluating all models", leave=True):
@@ -181,70 +209,91 @@ def compute_bottleneck_activation(num_models: int, dataset: str, base_path: str)
             dae = load_model(model_path+'dae/'+str(iteration), 'dae', 59)
         else:
             sae = load_conv_model(model_path+'sae/'+str(iteration), 'sae', 59)
-            dae = load_conv_model(model_path+'dae/'+str(iteration), 'dae', 59, size_ls=[128]*60)
+            pca = load_conv_model(model_path+'pca-ae/'+str(iteration), 'pca-ae', 59)
+            dae = load_conv_model(model_path+'dev-ae/'+str(iteration), 'dev-ae', 59, size_ls=[128]*60)
         
-        (sae_zeros, dae_zeros,
-         sae_per_image_zeros, dae_per_image_zeros,
-         sae_nonzero_mean, dae_nonzero_mean,
-         sae_per_image_nonzero_mean, dae_per_image_nonzero_mean) = evaluate_models(test_images, sae, dae)
-        
+        (sae_zeros, pca_zeros, dae_zeros,
+         sae_per_image_zeros, pca_per_image_zeros, dae_per_image_zeros,
+         sae_nonzero_mean, pca_nonzero_mean, dae_nonzero_mean,
+         sae_per_image_nonzero_mean, pca_per_image_nonzero_mean, dae_per_image_nonzero_mean) = evaluate_models(test_images, sae, pca, dae)
+
         all_sae_zeros.append(sae_zeros)
+        all_pca_zeros.append(pca_zeros)
         all_dae_zeros.append(dae_zeros)
         all_sae_nonzero_means.append(sae_nonzero_mean)
+        all_pca_nonzero_means.append(pca_nonzero_mean)
         all_dae_nonzero_means.append(dae_nonzero_mean)
 
         all_sae_per_image_zeros.append(sae_per_image_zeros)
+        all_pca_per_image_zeros.append(pca_per_image_zeros)
         all_dae_per_image_zeros.append(dae_per_image_zeros)
         all_sae_per_image_nonzero_means.append(sae_per_image_nonzero_mean)
+        all_pca_per_image_nonzero_means.append(pca_per_image_nonzero_mean)
         all_dae_per_image_nonzero_means.append(dae_per_image_nonzero_mean)
 
     # Average per neuron statistics
     sae_zeros_sum = np.zeros_like(all_sae_zeros[0])
+    pca_zeros_sum = np.zeros_like(all_pca_zeros[0])
     dae_zeros_sum = np.zeros_like(all_dae_zeros[0])
     sae_nonzero_means_sum = np.zeros_like(all_sae_nonzero_means[0])
+    pca_nonzero_means_sum = np.zeros_like(all_pca_nonzero_means[0])
     dae_nonzero_means_sum = np.zeros_like(all_dae_nonzero_means[0])
     
     for i in range(num_models):
         sae_zeros_sum += all_sae_zeros[i]
+        pca_zeros_sum += all_pca_zeros[i]
         dae_zeros_sum += all_dae_zeros[i]
         sae_nonzero_means_sum += all_sae_nonzero_means[i]
+        pca_nonzero_means_sum += all_pca_nonzero_means[i]
         dae_nonzero_means_sum += all_dae_nonzero_means[i]
     
     mean_sae_zeros = sae_zeros_sum / num_models
+    mean_pca_zeros = pca_zeros_sum / num_models
     mean_dae_zeros = dae_zeros_sum / num_models
     mean_sae_nonzero = sae_nonzero_means_sum / num_models
+    mean_pca_nonzero = pca_nonzero_means_sum / num_models
     mean_dae_nonzero = dae_nonzero_means_sum / num_models
     
     # Average per image statistics
     sae_per_image_zeros_avg = np.zeros_like(all_sae_per_image_zeros[0])
+    pca_per_image_zeros_avg = np.zeros_like(all_pca_per_image_zeros[0])
     dae_per_image_zeros_avg = np.zeros_like(all_dae_per_image_zeros[0])
     sae_per_image_nonzero_means_avg = np.zeros_like(all_sae_per_image_nonzero_means[0])
+    pca_per_image_nonzero_means_avg = np.zeros_like(all_pca_per_image_nonzero_means[0])
     dae_per_image_nonzero_means_avg = np.zeros_like(all_dae_per_image_nonzero_means[0])
     
     for i in range(num_models):
         sae_per_image_zeros_avg += all_sae_per_image_zeros[i]
+        pca_per_image_zeros_avg += all_pca_per_image_zeros[i]
         dae_per_image_zeros_avg += all_dae_per_image_zeros[i]
         sae_per_image_nonzero_means_avg += all_sae_per_image_nonzero_means[i]
+        pca_per_image_nonzero_means_avg += all_pca_per_image_nonzero_means[i]
         dae_per_image_nonzero_means_avg += all_dae_per_image_nonzero_means[i]
     
     sae_per_image_zeros_avg /= num_models
+    pca_per_image_zeros_avg /= num_models
     dae_per_image_zeros_avg /= num_models
     sae_per_image_nonzero_means_avg /= num_models
+    pca_per_image_nonzero_means_avg /= num_models
     dae_per_image_nonzero_means_avg /= num_models
     
     # Create Results directory if it doesn't exist
-    os.makedirs("Results", exist_ok=True)
+    os.makedirs("paper_results", exist_ok=True)
     
     np.save(result_file, {
         # Save only the metrics we care about
         'mean_sae_zeros': mean_sae_zeros,
+        'mean_pca_zeros': mean_pca_zeros,
         'mean_dae_zeros': mean_dae_zeros,
         'mean_sae_nonzero': mean_sae_nonzero,
+        'mean_pca_nonzero': mean_pca_nonzero,
         'mean_dae_nonzero': mean_dae_nonzero,
         
         'sae_per_image_zeros': sae_per_image_zeros_avg,
+        'pca_per_image_zeros': pca_per_image_zeros_avg,
         'dae_per_image_zeros': dae_per_image_zeros_avg,
         'sae_per_image_nonzero_means': sae_per_image_nonzero_means_avg,
+        'pca_per_image_nonzero_means': pca_per_image_nonzero_means_avg,
         'dae_per_image_nonzero_means': dae_per_image_nonzero_means_avg
     })
 

@@ -98,11 +98,12 @@ def rgb_to_grayscale(images):
     """
     # Standard luminance formula: 0.299 * R + 0.587 * G + 0.114 * B
     # Source: https://www.w3.org/TR/AERT/#color-contrast
-    grayscale = 0.299 * images[:, :, :, 0:1, :] + \
-                0.587 * images[:, :, :, 1:2, :] + \
-                0.114 * images[:, :, :, 2:3, :]
+    # Standard luminance formula: 0.299 * R + 0.587 * G + 0.114 * B
+    grayscale = 0.299 * images[:, :, 0, :, :] + \
+                0.587 * images[:, :, 1, :, :] + \
+                0.114 * images[:, :, 2, :, :]
     
-    return np.squeeze(grayscale, axis=3)
+    return np.squeeze(grayscale)
 
 
 def compute_power_spectra(save_path_sae: str, save_path_dae:str, 
@@ -133,24 +134,34 @@ def compute_power_spectra(save_path_sae: str, save_path_dae:str,
     MIN_HEIGHT = 28
 
     if len(sae_rfs.shape) == 4:
+        print('mnist')
         sae_rfs = sae_rfs.reshape(sae_rfs.shape[:-1] + (28, 28))
         dae_rfs = dae_rfs.reshape(dae_rfs.shape[:-1] + (28, 28))
 
-    if len(sae_rfs.shape) == 6:
-        sae_rfs = rgb_to_grayscale(sae_rfs)
-        dae_rfs = rgb_to_grayscale(dae_rfs)
+    if len(sae_rfs.shape) == 5 or len(dae_rfs.shape) == 5:
+        print('cifar')
+        # Shape is (num_models, num_neurons, 3, 32, 32)
+        # Convert to grayscale: (num_models, num_neurons, 32, 32)
+        sae_rfs_gray = 0.299 * sae_rfs[:, :, 0, :, :] + \
+                       0.587 * sae_rfs[:, :, 1, :, :] + \
+                       0.114 * sae_rfs[:, :, 2, :, :]
+        dae_rfs_gray = 0.299 * dae_rfs[:, :, 0, :, :] + \
+                       0.587 * dae_rfs[:, :, 1, :, :] + \
+                       0.114 * dae_rfs[:, :, 2, :, :]
+        sae_rfs = sae_rfs_gray
+        dae_rfs = dae_rfs_gray
         MIN_WIDTH = 32
         MIN_HEIGHT = 32
 
     for i in tqdm(range(num_models)):
         sae_power_spectrum = []
-        for rf in sae_rfs[i, epoch, :]:
+        for rf in sae_rfs[i, :]:  # Removed epoch indexing
             radial_avg = power_spectrum_radial_average(z_score(rf.reshape(MIN_WIDTH, MIN_HEIGHT)))
             sae_power_spectrum.append(radial_avg)
         sae_power_spectra.append(sae_power_spectrum)
 
         dae_power_spectrum = []
-        for rf in dae_rfs[i, epoch, :]:
+        for rf in dae_rfs[i, :]:  # Removed epoch indexing
             radial_avg = power_spectrum_radial_average(z_score(rf.reshape(MIN_WIDTH, MIN_HEIGHT)))
             dae_power_spectrum.append(radial_avg)
         dae_power_spectra.append(dae_power_spectrum)

@@ -5,12 +5,12 @@ import tqdm
 from solver import *
 from model_utils import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11
+# })
 
 
 def get_train_loss_per_epoch(model_type, dataset, num_models = 10, base_path = '/home/david/'):
@@ -21,7 +21,10 @@ def get_train_loss_per_epoch(model_type, dataset, num_models = 10, base_path = '
         if dataset == 'mnist':
             train_losses = np.load(file_path + 'all_train_losses.npy')
         elif dataset == 'cifar':
-            train_losses = np.load(file_path + 'train_loss.npy')
+            try:
+                train_losses = np.load(file_path + 'train_loss.npy')
+            except FileNotFoundError:
+                train_losses = np.load(file_path + 'all_train_losses.npy')
         if dataset == 'mnist':
             train_losses = np.mean(train_losses, axis=1)
 
@@ -87,7 +90,10 @@ def get_vali_loss_per_epoch(model_type, dataset, num_models = 10, base_path = '/
     
     for model_idx in range(num_models):
         file_path = f'{base_path}{dataset}_models/{model_type}/{model_idx}/'
-        train_losses = np.load(file_path + 'vali_loss.npy')
+        try:
+            train_losses = np.load(file_path + 'vali_loss.npy')
+        except FileNotFoundError:
+            train_losses = np.load(file_path + 'all_vali_losses.npy')
 
         # Convert MSE to RMSE
         rmse_normalized = np.sqrt(train_losses)

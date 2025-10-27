@@ -14,12 +14,12 @@ from autoencoder import *
 from model_utils import *
 from solver import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11
+# })
 
 
 def encode_dataset(model, dataset_images, dataset="mnist"):
@@ -86,7 +86,7 @@ def create_frequency_noisy_images(images, dataset, noise_scale=1.0):
     return low_freq_images, mid_freq_images, high_freq_images
 
 
-def evaluate_frequency_classification(sae_model, dae_model, dataset="mnist", noise_scale=1.0):
+def evaluate_frequency_classification(sae_model, pca_ae_model, dae_model, dataset="mnist", noise_scale=1.0):
     """
     Evaluate classification accuracy on images with different frequency noise.
     
@@ -110,64 +110,83 @@ def evaluate_frequency_classification(sae_model, dae_model, dataset="mnist", noi
     
     # Encode training images
     sae_train_encodings = encode_dataset(sae_model, images[:7000], dataset)
+    pca_ae_train_encodings = encode_dataset(pca_ae_model, images[:7000], dataset)
     dae_train_encodings = encode_dataset(dae_model, images[:7000], dataset)
     
     # Encode clean test images
     sae_clean_encodings = encode_dataset(sae_model, images[7000:], dataset)
+    pca_ae_clean_encodings = encode_dataset(pca_ae_model, images[7000:], dataset)
     dae_clean_encodings = encode_dataset(dae_model, images[7000:], dataset)
     
     # Train classifiers
     sae_classifier = LogisticRegression(max_iter=3000)
+    pca_ae_classifier = LogisticRegression(max_iter=3000)
     dae_classifier = LogisticRegression(max_iter=3000)
     
     sae_classifier.fit(sae_train_encodings, labels[:7000])
+    pca_ae_classifier.fit(pca_ae_train_encodings, labels[:7000])
     dae_classifier.fit(dae_train_encodings, labels[:7000])
     
     # Clean test images
     sae_clean_pred = sae_classifier.predict(sae_clean_encodings)
+    pca_ae_clean_pred = pca_ae_classifier.predict(pca_ae_clean_encodings)
     dae_clean_pred = dae_classifier.predict(dae_clean_encodings)
     
     sae_clean_acc = accuracy_score(labels[7000:], sae_clean_pred)
+    pca_ae_clean_acc = accuracy_score(labels[7000:], pca_ae_clean_pred)
     dae_clean_acc = accuracy_score(labels[7000:], dae_clean_pred)
     
     # Low frequency noise images
     sae_low_freq_encodings = encode_dataset(sae_model, low_freq_images, dataset)
+    pca_ae_low_freq_encodings = encode_dataset(pca_ae_model, low_freq_images, dataset)
     dae_low_freq_encodings = encode_dataset(dae_model, low_freq_images, dataset)
     
     sae_low_freq_pred = sae_classifier.predict(sae_low_freq_encodings)
+    pca_ae_low_freq_pred = pca_ae_classifier.predict(pca_ae_low_freq_encodings)
     dae_low_freq_pred = dae_classifier.predict(dae_low_freq_encodings)
     
     sae_low_freq_acc = accuracy_score(labels, sae_low_freq_pred)
+    pca_ae_low_freq_acc = accuracy_score(labels, pca_ae_low_freq_pred)
     dae_low_freq_acc = accuracy_score(labels, dae_low_freq_pred)
     
     # Mid frequency noise images
     sae_mid_freq_encodings = encode_dataset(sae_model, mid_freq_images, dataset)
+    pca_ae_mid_freq_encodings = encode_dataset(pca_ae_model, mid_freq_images, dataset)
     dae_mid_freq_encodings = encode_dataset(dae_model, mid_freq_images, dataset)
     
     sae_mid_freq_pred = sae_classifier.predict(sae_mid_freq_encodings)
+    pca_ae_mid_freq_pred = pca_ae_classifier.predict(pca_ae_mid_freq_encodings)
     dae_mid_freq_pred = dae_classifier.predict(dae_mid_freq_encodings)
     
     sae_mid_freq_acc = accuracy_score(labels, sae_mid_freq_pred)
+    pca_ae_mid_freq_acc = accuracy_score(labels, pca_ae_mid_freq_pred)
     dae_mid_freq_acc = accuracy_score(labels, dae_mid_freq_pred)
     
     # High frequency noise images
     sae_high_freq_encodings = encode_dataset(sae_model, high_freq_images, dataset)
+    pca_ae_high_freq_encodings = encode_dataset(pca_ae_model, high_freq_images, dataset)
     dae_high_freq_encodings = encode_dataset(dae_model, high_freq_images, dataset)
     
     sae_high_freq_pred = sae_classifier.predict(sae_high_freq_encodings)
+    pca_ae_high_freq_pred = pca_ae_classifier.predict(pca_ae_high_freq_encodings)
     dae_high_freq_pred = dae_classifier.predict(dae_high_freq_encodings)
     
     sae_high_freq_acc = accuracy_score(labels, sae_high_freq_pred)
+    pca_ae_high_freq_acc = accuracy_score(labels, pca_ae_high_freq_pred)
     dae_high_freq_acc = accuracy_score(labels, dae_high_freq_pred)
     
     return {
         'sae_clean_acc': sae_clean_acc,
+        'pca_ae_clean_acc': pca_ae_clean_acc,
         'dae_clean_acc': dae_clean_acc,
         'sae_low_freq_acc': sae_low_freq_acc,
+        'pca_ae_low_freq_acc': pca_ae_low_freq_acc,
         'dae_low_freq_acc': dae_low_freq_acc,
         'sae_mid_freq_acc': sae_mid_freq_acc,
+        'pca_ae_mid_freq_acc': pca_ae_mid_freq_acc,
         'dae_mid_freq_acc': dae_mid_freq_acc,
         'sae_high_freq_acc': sae_high_freq_acc,
+        'pca_ae_high_freq_acc': pca_ae_high_freq_acc,
         'dae_high_freq_acc': dae_high_freq_acc
     }
 
@@ -183,7 +202,7 @@ def load_and_calculate_pvalues(dataset="mnist"):
         Dictionary with p-values for each noise type
     """
     # Load all individual results (not just averages)
-    all_results_file = f"Results/{dataset}_all_frequency_classification.npy"
+    all_results_file = f"paper_results/{dataset}_all_frequency_classification.npy"
     
     try:
         all_results = np.load(all_results_file, allow_pickle=True).item()
@@ -193,38 +212,85 @@ def load_and_calculate_pvalues(dataset="mnist"):
         return None
     
     # Calculate p-values for each noise type using arrays of individual measurements
-    # Clean images
-    _, p_clean = stats.ttest_rel(
+    p_values = {}
+
+    # --- SAE vs DAE ---
+    _, p_values['clean_sae_vs_dae'] = stats.ttest_rel(
         all_results['sae_clean_acc'],
         all_results['dae_clean_acc']
     )
-    
-    # Low frequency noise
-    _, p_low = stats.ttest_rel(
+    _, p_values['low_freq_sae_vs_dae'] = stats.ttest_rel(
         all_results['sae_low_freq_acc'],
         all_results['dae_low_freq_acc']
     )
-    
-    # Mid frequency noise
-    _, p_mid = stats.ttest_rel(
+    _, p_values['mid_freq_sae_vs_dae'] = stats.ttest_rel(
         all_results['sae_mid_freq_acc'],
         all_results['dae_mid_freq_acc']
     )
-    
-    # High frequency noise
-    _, p_high = stats.ttest_rel(
+    _, p_values['high_freq_sae_vs_dae'] = stats.ttest_rel(
         all_results['sae_high_freq_acc'],
         all_results['dae_high_freq_acc']
     )
-    
-    p_values = {
-        'clean': p_clean,
-        'low_freq': p_low,
-        'mid_freq': p_mid,
-        'high_freq': p_high
-    }
+
+    # --- SAE vs PCA-AE ---
+    _, p_values['clean_sae_vs_pca'] = stats.ttest_rel(
+        all_results['sae_clean_acc'],
+        all_results['pca_ae_clean_acc']
+    )
+    _, p_values['low_freq_sae_vs_pca'] = stats.ttest_rel(
+        all_results['sae_low_freq_acc'],
+        all_results['pca_ae_low_freq_acc']
+    )
+    _, p_values['mid_freq_sae_vs_pca'] = stats.ttest_rel(
+        all_results['sae_mid_freq_acc'],
+        all_results['pca_ae_mid_freq_acc']
+    )
+    _, p_values['high_freq_sae_vs_pca'] = stats.ttest_rel(
+        all_results['sae_high_freq_acc'],
+        all_results['pca_ae_high_freq_acc']
+    )
+
+    # --- DAE vs PCA-AE ---
+    _, p_values['clean_dae_vs_pca'] = stats.ttest_rel(
+        all_results['dae_clean_acc'],
+        all_results['pca_ae_clean_acc']
+    )
+    _, p_values['low_freq_dae_vs_pca'] = stats.ttest_rel(
+        all_results['dae_low_freq_acc'],
+        all_results['pca_ae_low_freq_acc']
+    )
+    _, p_values['mid_freq_dae_vs_pca'] = stats.ttest_rel(
+        all_results['dae_mid_freq_acc'],
+        all_results['pca_ae_mid_freq_acc']
+    )
+    _, p_values['high_freq_dae_vs_pca'] = stats.ttest_rel(
+        all_results['dae_high_freq_acc'],
+        all_results['pca_ae_high_freq_acc']
+    )
         
     return p_values
+
+
+def add_significance_marker(x1, x2, y_start, p_value, ax):
+    """
+    Adds a significance marker (bracket with star) between two bars.
+    """
+    if p_value >= 0.05:
+        return  # Don't draw for non-significant results
+
+    # Determine star text
+    if p_value < 0.001:
+        star_text = '***'
+    elif p_value < 0.01:
+        star_text = '**'
+    else:
+        star_text = '*'
+
+    # Bracket line
+    ax.plot([x1, x1, x2, x2], [y_start, y_start + 0.01, y_start + 0.01, y_start], lw=1, c='black')
+    
+    # Star text
+    ax.text((x1 + x2) * 0.5, y_start + 0.01, star_text, ha='center', va='bottom', color='black', fontsize=11)
 
 
 def plot_frequency_classification_results(results, dataset="mnist", std_devs=None, p_values=None):
@@ -238,12 +304,19 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
         p_values: Dictionary with p-values for significance testing
     """    
     plt.figure(figsize=(6.266 * 0.5, 2.5))
+    ax = plt.gca()
     
     sae_accs = [
         results['sae_clean_acc'],
         results['sae_low_freq_acc'],
         results['sae_mid_freq_acc'],
         results['sae_high_freq_acc']
+    ]
+    pca_ae_accs = [
+        results['pca_ae_clean_acc'],
+        results['pca_ae_low_freq_acc'],
+        results['pca_ae_mid_freq_acc'],
+        results['pca_ae_high_freq_acc']
     ]
     dae_accs = [
         results['dae_clean_acc'],
@@ -252,52 +325,48 @@ def plot_frequency_classification_results(results, dataset="mnist", std_devs=Non
         results['dae_high_freq_acc']
     ]
     
-    sae_errors = [
-        std_devs.get('sae_clean_acc', 0),
-        std_devs.get('sae_low_freq_acc', 0),
-        std_devs.get('sae_mid_freq_acc', 0),
-        std_devs.get('sae_high_freq_acc', 0)
-    ]
-    dae_errors = [
-        std_devs.get('dae_clean_acc', 0),
-        std_devs.get('dae_low_freq_acc', 0),
-        std_devs.get('dae_mid_freq_acc', 0),
-        std_devs.get('dae_high_freq_acc', 0)
-    ]
+    sae_errors = [std_devs.get(k, 0) for k in ['sae_clean_acc', 'sae_low_freq_acc', 'sae_mid_freq_acc', 'sae_high_freq_acc']]
+    pca_ae_errors = [std_devs.get(k, 0) for k in ['pca_ae_clean_acc', 'pca_ae_low_freq_acc', 'pca_ae_mid_freq_acc', 'pca_ae_high_freq_acc']]
+    dae_errors = [std_devs.get(k, 0) for k in ['dae_clean_acc', 'dae_low_freq_acc', 'dae_mid_freq_acc', 'dae_high_freq_acc']]
     
     x = np.arange(4)
-    width = 0.35
+    width = 0.25
     
     # Create the bar plots
-    sae_bars = plt.bar(x - width/2, sae_accs, width, label='AE', color='#1a7adb', 
-                      yerr=sae_errors, capsize=5)
-    dae_bars = plt.bar(x + width/2, dae_accs, width, label='Dev-AE', color='#e82817', 
-                      yerr=dae_errors, capsize=5)
+    sae_bars = ax.bar(x - width, sae_accs, width, label='AE', color='#1a7adb', 
+                      yerr=sae_errors, capsize=4)
+    pca_ae_bars = ax.bar(x, pca_ae_accs, width, label='PCA-AE', color='#34a853',
+                         yerr=pca_ae_errors, capsize=4)
+    dae_bars = ax.bar(x + width, dae_accs, width, label='Dev-AE', color='#e82817', 
+                      yerr=dae_errors, capsize=4)
     
     plt.xlabel('Frequency Noise Type')
     plt.ylabel('Classification Accuracy')
-    # plt.title(f'Classification of Frequency Noise Types {dataset.upper()}')
     plt.xticks(x, ['Clean', 'Low', 'Medium', 'High'])
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.25))
-    plt.gca().spines['top'].set_visible(False)
-    plt.gca().spines['right'].set_visible(False)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.25), ncol=3)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     
     # Add significance markers if p-values are provided
     if p_values is not None:
-        # Add significance markers based on p-values
-        p_list = [p_values.get('clean', 1), 
-                 p_values.get('low_freq', 1), 
-                 p_values.get('mid_freq', 1), 
-                 p_values.get('high_freq', 1)]
-        
-        for i, p in enumerate(p_list):
-            bar_height = max(sae_accs[i], dae_accs[i])
-            y_pos = bar_height + max(sae_errors[i], dae_errors[i]) + 0.01
-            
-            if p < 0.05:
-                plt.text(x[i], y_pos, '*', ha='center', va='bottom', fontsize=11)
-            else:
-                plt.text(x[i], y_pos, 'ns', ha='center', va='bottom', fontsize=11)
+        p_keys_sae_dae = ['clean_sae_vs_dae', 'low_freq_sae_vs_dae', 'mid_freq_sae_vs_dae', 'high_freq_sae_vs_dae']
+        p_keys_sae_pca = ['clean_sae_vs_pca', 'low_freq_sae_vs_pca', 'mid_freq_sae_vs_pca', 'high_freq_sae_vs_pca']
+        p_keys_dae_pca = ['clean_dae_vs_pca', 'low_freq_dae_vs_pca', 'mid_freq_dae_vs_pca', 'high_freq_dae_vs_pca']
+
+        for i in range(4):
+            # Determine the top of the bars for positioning the markers
+            all_heights = [sae_accs[i] + sae_errors[i], pca_ae_accs[i] + pca_ae_errors[i], dae_accs[i] + dae_errors[i]]
+            y_base = max(all_heights) + 0.02
+
+            # SAE vs DAE
+            add_significance_marker(x[i] - width, x[i] + width, y_base + 0.05, p_values.get(p_keys_sae_dae[i], 1), ax)
+            # SAE vs PCA-AE
+            add_significance_marker(x[i] - width, x[i], y_base, p_values.get(p_keys_sae_pca[i], 1), ax)
+            # DAE vs PCA-AE
+            add_significance_marker(x[i], x[i] + width, y_base, p_values.get(p_keys_dae_pca[i], 1), ax)
+
+    # Adjust y-axis limit to make space for markers
+    ax.set_ylim(top=ax.get_ylim()[1] * 1.15)
     
     plt.savefig(f"Results/figures/png/{dataset}_all_freq_classification.png", dpi=300, bbox_inches='tight')
     plt.savefig(f"Results/figures/svg/{dataset}_all_freq_classification.svg", bbox_inches='tight')
@@ -435,9 +504,10 @@ def run_frequency_classification_analysis(iteration, dataset="mnist", base_path=
     else:
         model_path = f"{base_path}cifar_models/"
         sae = load_conv_model(f"{model_path}sae/{iteration}", 'sae', 59)
-        dae = load_conv_model(f"{model_path}dae/{iteration}", 'dae', 59, size_ls=[128]*60)
+        pca_ae = load_conv_model(f"{model_path}pca-ae/{iteration}", 'pca-ae', 59)
+        dae = load_conv_model(f"{model_path}dev-ae/{iteration}", 'dev-ae', 59, size_ls=[128]*60)
     
-    results = evaluate_frequency_classification(sae, dae, dataset, noise_scale)
+    results = evaluate_frequency_classification(sae, pca_ae, dae, dataset, noise_scale)
     
     return results
 
@@ -453,93 +523,49 @@ def compute_average_frequency_classification(num_models, dataset="mnist", base_p
         noise_scale: Scale of the noise to add
         
     Returns:
-        Average results dictionary with accuracies
+        A nested dictionary containing comprehensive results.
     """
-    result_file = f"Results/{dataset}_avg_frequency_classification.npy"
-    std_file = f"Results/{dataset}_std_frequency_classification.npy"
+    result_file = f"paper_results/{dataset}_frequency_classification_summary.npy"
     
-    # Check if average results already exist
-    if os.path.exists(result_file) and os.path.exists(std_file):
-        print(f"Loading existing average results from {result_file}")
-        avg_results = np.load(result_file, allow_pickle=True).item()
-        std_results = np.load(std_file, allow_pickle=True).item()
+    # Check if a summary file already exists
+    if os.path.exists(result_file):
+        print(f"Loading existing summary results from {result_file}")
+        summary_results = np.load(result_file, allow_pickle=True).item()
     else:
-        all_results = {
-            'sae_clean_acc': [],
-            'dae_clean_acc': [],
-            'sae_low_freq_acc': [],
-            'dae_low_freq_acc': [],
-            'sae_mid_freq_acc': [],
-            'dae_mid_freq_acc': [],
-            'sae_high_freq_acc': [],
-            'dae_high_freq_acc': []
+        model_keys = ['sae', 'pca_ae', 'dae']
+        condition_keys = ['clean', 'low_freq', 'mid_freq', 'high_freq']
+        
+        # Nested dictionary to hold all results
+        summary_results = {
+            model: {
+                cond: {'all': []} for cond in condition_keys
+            } for model in model_keys
         }
-        
-        total_sae_clean_acc = 0
-        total_dae_clean_acc = 0
-        total_sae_low_freq_acc = 0
-        total_dae_low_freq_acc = 0
-        total_sae_mid_freq_acc = 0
-        total_dae_mid_freq_acc = 0
-        total_sae_high_freq_acc = 0
-        total_dae_high_freq_acc = 0
-        
+
         # Evaluate each model
-        for i in tqdm(range(num_models), desc=f"Processing models", leave=True):
+        for i in tqdm(range(num_models), desc=f"Processing models for {dataset}", leave=True):
             results = run_frequency_classification_analysis(i, dataset, base_path, noise_scale)
             
-            all_results['sae_clean_acc'].append(results['sae_clean_acc'])
-            all_results['dae_clean_acc'].append(results['dae_clean_acc'])
-            all_results['sae_low_freq_acc'].append(results['sae_low_freq_acc'])
-            all_results['dae_low_freq_acc'].append(results['dae_low_freq_acc'])
-            all_results['sae_mid_freq_acc'].append(results['sae_mid_freq_acc'])
-            all_results['dae_mid_freq_acc'].append(results['dae_mid_freq_acc'])
-            all_results['sae_high_freq_acc'].append(results['sae_high_freq_acc'])
-            all_results['dae_high_freq_acc'].append(results['dae_high_freq_acc'])
-            
-            total_sae_clean_acc += results['sae_clean_acc']
-            total_dae_clean_acc += results['dae_clean_acc']
-            total_sae_low_freq_acc += results['sae_low_freq_acc']
-            total_dae_low_freq_acc += results['dae_low_freq_acc']
-            total_sae_mid_freq_acc += results['sae_mid_freq_acc']
-            total_dae_mid_freq_acc += results['dae_mid_freq_acc']
-            total_sae_high_freq_acc += results['sae_high_freq_acc']
-            total_dae_high_freq_acc += results['dae_high_freq_acc']
+            for model_key in model_keys:
+                for cond_key in condition_keys:
+                    result_key = f'{model_key}_{cond_key}_acc'
+                    if result_key in results:
+                        summary_results[model_key][cond_key]['all'].append(results[result_key])
+
+        for model_key in model_keys:
+            for cond_key in condition_keys:
+                all_data = summary_results[model_key][cond_key]['all']
+                if all_data:
+                    summary_results[model_key][cond_key]['avg'] = np.mean(all_data)
+                    summary_results[model_key][cond_key]['std'] = np.std(all_data)
         
-        # Compute averages
-        avg_results = {
-            'sae_clean_acc': total_sae_clean_acc / num_models,
-            'dae_clean_acc': total_dae_clean_acc / num_models,
-            'sae_low_freq_acc': total_sae_low_freq_acc / num_models,
-            'dae_low_freq_acc': total_dae_low_freq_acc / num_models,
-            'sae_mid_freq_acc': total_sae_mid_freq_acc / num_models,
-            'dae_mid_freq_acc': total_dae_mid_freq_acc / num_models,
-            'sae_high_freq_acc': total_sae_high_freq_acc / num_models,
-            'dae_high_freq_acc': total_dae_high_freq_acc / num_models
-        }
-        
-        # Compute standard deviations
-        std_results = {
-            'sae_clean_acc': np.std(all_results['sae_clean_acc']),
-            'dae_clean_acc': np.std(all_results['dae_clean_acc']),
-            'sae_low_freq_acc': np.std(all_results['sae_low_freq_acc']),
-            'dae_low_freq_acc': np.std(all_results['dae_low_freq_acc']),
-            'sae_mid_freq_acc': np.std(all_results['sae_mid_freq_acc']),
-            'dae_mid_freq_acc': np.std(all_results['dae_mid_freq_acc']),
-            'sae_high_freq_acc': np.std(all_results['sae_high_freq_acc']),
-            'dae_high_freq_acc': np.std(all_results['dae_high_freq_acc'])
-        }
-        
-        np.save(f"Results/{dataset}_all_frequency_classification.npy", all_results)
-        np.save(result_file, avg_results)
-        np.save(std_file, std_results)
-    
-    p_values = load_and_calculate_pvalues(dataset)
+        os.makedirs("paper_results", exist_ok=True)
+        np.save(result_file, summary_results)
     
     if create_plots:
-        plot_frequency_classification_results(avg_results, dataset, std_results, p_values)
+        pass
     
-    return avg_results
+    return summary_results
 
 
 def visualize_frequency_noise(image_idx, dataset="mnist", noise_scale=1, save_path="Results/figures/"):

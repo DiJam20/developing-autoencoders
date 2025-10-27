@@ -11,13 +11,13 @@ from autoencoder import *
 from model_utils import *
 from solver import *
 
-mpl.rcParams.update({
-    'text.usetex': True,
-    'font.family': 'serif',
-    'font.serif': ['Computer Modern'],
-    'font.size': 11,
-    'axes.titlesize': 11
-})
+# mpl.rcParams.update({
+#     'text.usetex': True,
+#     'font.family': 'serif',
+#     'font.serif': ['Computer Modern'],
+#     'font.size': 11,
+#     'axes.titlesize': 11
+# })
 
 
 def add_noise_and_calculate_loss(model, image, start_idx, end_idx, dataset, normalize=False):

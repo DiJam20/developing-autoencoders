@@ -161,7 +161,7 @@ def compute_final_rfs(model_type: str, dataset: str = "mnist",
     Returns:
         None: Saves the RFs to a file.
     """
-    result_file = f"Results/{dataset}_{model_type}_final_rfs.npy"
+    result_file = f"paper_results/{dataset}_{model_type}_final_rfs.npy"
 
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
