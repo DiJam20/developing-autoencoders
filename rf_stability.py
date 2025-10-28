@@ -44,7 +44,7 @@ def plot_rfs_for_single_model(model_type: str, dataset: str = "mnist", model_idx
     Plot receptive fields for all neurons in a model at a specific epoch.
     
     Args:
-        model_type (str): Type of model ('sae' or 'dae')
+        model_type (str): Type of model ('sae', 'pca-ae', or 'dae')
         dataset (str): Dataset used for training ('mnist' or 'cifar').
         model_idx (int): Index of the model to visualize
         epoch_idx (int): Index of epoch to visualize (-1 for last epoch)
@@ -68,7 +68,12 @@ def plot_rfs_for_single_model(model_type: str, dataset: str = "mnist", model_idx
     rf_ls = rf_matrix[epoch_idx]
     
     fig = plt.figure(figsize=fig_size)
-    model_name = 'AE' if model_type == 'sae' else 'DevAE'
+    if model_type == 'sae':
+        model_name = 'AE'
+    elif model_type == 'pca-ae':
+        model_name = 'PCA-AE'
+    else:
+        model_name = 'Dev-AE'
     fig.suptitle(f"Receptive Fields of All Neurons ({model_name}, {dataset.upper()})", fontsize=24)
     
     for i in range(MAX_NEURONS):
@@ -231,7 +236,7 @@ def compute_average_angles_matrix(model_type: str, dataset: str = "mnist",
     angles_matrix = np.load(f"Results/{dataset}_{model_type}_rf_stability_{comparison_type}_angles.npy")
     average_angles_matrix = np.mean(angles_matrix, axis=0)
 
-    if model_type == "sae":
+    if model_type == "sae" or model_type == "pca-ae":
         return average_angles_matrix, None
     elif model_type == "dae":
         highlighted_non_computable_angles = average_angles_matrix.copy()
@@ -313,8 +318,10 @@ def create_heatmap(model_type: str, dataset: str = "mnist",
     
     if model_type == "sae":
         ax.set_title(f"Stability of Receptive Fields (AE, {dataset.upper()})", fontsize=28, pad=25)
+    elif model_type == "pca-ae":
+        ax.set_title(f"Stability of Receptive Fields (PCA-AE, {dataset.upper()})", fontsize=28, pad=25)
     elif model_type == "dae":
-        ax.set_title(f"Stability of Receptive Fields (DevAE, {dataset.upper()})", fontsize=28, pad=25)
+        ax.set_title(f"Stability of Receptive Fields (Dev-AE, {dataset.upper()})", fontsize=28, pad=25)
     
     ax.set_xlabel("Epoch Comparison", fontsize=24)
     ax.set_ylabel("Neuron Index", fontsize=24)
@@ -355,26 +362,29 @@ def analyze_rf_stability(model_type: str, dataset: str = "mnist",
 
 def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=False):
     """
-    Create combined heatmaps for SAE and DAE RF stability with a shared colorbar.
-    This function should be called after running analyze_rf_stability for both SAE and DAE.
+    Create combined heatmaps for SAE, PCA-AE, and DAE RF stability with a shared colorbar.
+    This function should be called after running analyze_rf_stability for all three models.
     
     Args:
         dataset: Dataset ('mnist' or 'cifar')
         compare_final_epoch: Whether angles were computed against final epoch
     """
     sae_angle_matrix, sae_non_computable = compute_average_angles_matrix('sae', dataset, compare_final_epoch)
+    pca_ae_angle_matrix, pca_ae_non_computable = compute_average_angles_matrix('pca-ae', dataset, compare_final_epoch)
     dae_angle_matrix, dae_non_computable = compute_average_angles_matrix('dae', dataset, compare_final_epoch)
     
-    fig = plt.figure(figsize=(6.266, 1.7), dpi=300)
+    fig = plt.figure(figsize=(9.399, 1.7), dpi=300)
     
-    # Create grid with 3 columns: AE, Dev-AE, colorbar
-    gs = plt.GridSpec(1, 3, width_ratios=[1, 1, 0.05], wspace=0.25)
+    # Create grid with 4 columns: AE, PCA-AE, Dev-AE, colorbar
+    gs = plt.GridSpec(1, 4, width_ratios=[1, 1, 1, 0.05], wspace=0.25)
     
     ax_sae = plt.subplot(gs[0])
-    ax_dae = plt.subplot(gs[1])
-    ax_cbar = plt.subplot(gs[2])
+    ax_pca_ae = plt.subplot(gs[1])
+    ax_dae = plt.subplot(gs[2])
+    ax_cbar = plt.subplot(gs[3])
     
     ax_sae.set_aspect('auto')
+    ax_pca_ae.set_aspect('auto')
     ax_dae.set_aspect('auto')
     
     cmap = plt.cm.viridis
@@ -388,6 +398,16 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
         vmax=90,
         cbar=False,
         ax=ax_sae
+    )
+    
+    # PCA-AE heatmap
+    sns.heatmap(
+        pca_ae_angle_matrix[:, :],
+        cmap=cmap,
+        vmin=0,
+        vmax=90,
+        cbar=False,
+        ax=ax_pca_ae
     )
     
     # DAE heatmap
@@ -424,12 +444,13 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
     cbar.minorticks_off()
     
     ax_sae.set_title("AE", pad=10)
+    ax_pca_ae.set_title("PCA-AE", pad=10)
     ax_dae.set_title("Dev-AE", pad=10)
     
     max_epochs = sae_angle_matrix.shape[1]
     mid_epoch = max_epochs // 2
     
-    for ax in [ax_sae, ax_dae]:
+    for ax in [ax_sae, ax_pca_ae, ax_dae]:
         if compare_final_epoch:
             ax.set_xticks([0.5, mid_epoch - 0.5, max_epochs - 0.5])
             ax.set_xticklabels(["1", f"{mid_epoch}", f"{max_epochs-1}"], 
@@ -446,6 +467,10 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
     ax_sae.set_yticks([0.5, mid_neuron - 0.5, num_neurons - 0.5])
     ax_sae.set_yticklabels(["1", f"{mid_neuron}", f"{num_neurons}"], rotation=0)
     ax_sae.set_ylabel("Neuron Index")
+    
+    ax_pca_ae.set_yticks([])
+    ax_pca_ae.set_yticklabels([])
+    ax_pca_ae.set_ylabel("")
     
     ax_dae.set_yticks([])
     ax_dae.set_yticklabels([])
@@ -464,7 +489,7 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
 def analyze_combined_rf_stability(dataset='mnist', compare_final_epoch=False,
                                num_models=10, num_epochs=60):
     """
-    Run RF stability analysis for both SAE and DAE and create a combined visualization.
+    Run RF stability analysis for SAE, PCA-AE, and DAE and create a combined visualization.
     
     Args:
         dataset: Dataset name ('mnist' or 'cifar')
@@ -474,6 +499,11 @@ def analyze_combined_rf_stability(dataset='mnist', compare_final_epoch=False,
     """
     # Run SAE analysis
     analyze_rf_stability(model_type='sae', dataset=dataset, 
+                        compare_final_epoch=compare_final_epoch,
+                        num_models=num_models, num_epochs=num_epochs)
+    
+    # Run PCA-AE analysis
+    analyze_rf_stability(model_type='pca-ae', dataset=dataset, 
                         compare_final_epoch=compare_final_epoch,
                         num_models=num_models, num_epochs=num_epochs)
     

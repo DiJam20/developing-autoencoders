@@ -118,7 +118,7 @@ def compute_rfs(model_type: str, dataset: str = "mnist",
     Returns:
         None: Saves the RFs to a file.
     """
-    result_file = f"Results/{dataset}_{model_type}_rfs.npy"
+    result_file = f"paper_results/{dataset}_{model_type}_rfs.npy"
 
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
@@ -234,3 +234,11 @@ def compute_final_rfs(model_type: str, dataset: str = "mnist",
     np.save(result_file, rf_matrices)
     
     return rf_matrices
+
+
+if __name__ == "__main__":
+    compute_rfs(model_type='sae', dataset='cifar', num_models=2, num_epochs=60)
+    compute_rfs(model_type='pca-ae', dataset='cifar', num_models=2, num_epochs=60)
+
+    cifar_size_ls = [6] * 6 + [10] * 6 + [17] * 7 + [29] * 7 + [50] * 8 + [85] * 8 + [128] * 18
+    compute_rfs(model_type='dae', dataset='cifar', size_ls=cifar_size_ls, num_models=2, num_epochs=60)
