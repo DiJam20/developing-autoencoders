@@ -2,4 +2,4 @@ __pycache__/
 
 data/
 
-Results/
+Results/paper_results/*.npy
