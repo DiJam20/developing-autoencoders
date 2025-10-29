@@ -201,7 +201,7 @@ def plot_zeros_per_neuron(ax, dataset="cifar"):
     width = 0.25
     
     # Scale up the percentages by 1000
-    scale_factor = 1000
+    scale_factor = 1
     
     sae_group_means_scaled = [x * scale_factor for x in sae_group_means]
     pca_group_means_scaled = [x * scale_factor for x in pca_group_means]
@@ -233,7 +233,9 @@ def plot_zeros_per_neuron(ax, dataset="cifar"):
         ax.scatter(x_indices[i] + width + x_jitter_dae, dae_group_data[i] * scale_factor, 
                   color='#e82817', s=20, alpha=0.6, zorder=1, edgecolors='black', linewidths=0.5)
     
-    ax.set_ylabel('% Zero Activation (×10³)', fontsize=LABEL_SIZE)
+    # ax.set_ylabel('% Zero Activation (×10⁻³)', fontsize=LABEL_SIZE)
+    ax.set_ylabel('% Zero Activation', fontsize=LABEL_SIZE)
+
 
     ax.set_xticks(x_indices)
     ax.set_xticklabels([])

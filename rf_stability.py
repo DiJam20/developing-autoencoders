@@ -63,7 +63,7 @@ def plot_rfs_for_single_model(model_type: str, dataset: str = "mnist", model_idx
         fig_size = (20, 15)
         subplot_rows, subplot_cols = 10, 13
     
-    rf_matrices = np.load(f"Results/{dataset}_{model_type}_rfs.npy", allow_pickle=True)
+    rf_matrices = np.load(f"paper_results/{dataset}_{model_type}_rfs.npy", allow_pickle=True)
     rf_matrix = rf_matrices[model_idx]
     rf_ls = rf_matrix[epoch_idx]
     
@@ -111,7 +111,7 @@ def plot_rf_over_time(model_type: str, dataset: str = "mnist", model_idx: int = 
     Returns:
         None: Plots the receptive field development and saves the figure.
     """
-    rf_matrices = np.load(f"Results/{dataset}_{model_type}_rfs.npy", allow_pickle=True)
+    rf_matrices = np.load(f"paper_results/{dataset}_{model_type}_rfs.npy", allow_pickle=True)
     rf_matrix = rf_matrices[model_idx]
     
     selected_epochs = list(range(0, len(rf_matrix), 5))    
@@ -174,13 +174,13 @@ def compute_angles_between_rfs(model_type: str, dataset: str = "mnist",
         MAX_NEURONS = 128
     
     comparison_type = "final_epoch" if compare_final_epoch else "consecutive"
-    angles_file = f"Results/{dataset}_{model_type}_rf_stability_{comparison_type}_angles.npy"
+    angles_file = f"paper_results/{dataset}_{model_type}_rf_stability_{comparison_type}_angles.npy"
 
     if os.path.exists(angles_file):
         print(f"Loading existing angle calculations from {angles_file}")
         return None
 
-    rf_matrices = np.load(f"Results/{dataset}_{model_type}_rfs.npy", allow_pickle=True)
+    rf_matrices = np.load(f"paper_results/{dataset}_{model_type}_rfs.npy", allow_pickle=True)
     
     if compare_final_epoch:
         # Compare each epoch with the final epoch
@@ -233,12 +233,12 @@ def compute_average_angles_matrix(model_type: str, dataset: str = "mnist",
         non_computable_cells (np.ndarray): Matrix of non-computable cells in the average angles matrix.
     """
     comparison_type = "final_epoch" if compare_final_epoch else "consecutive"
-    angles_matrix = np.load(f"Results/{dataset}_{model_type}_rf_stability_{comparison_type}_angles.npy")
+    angles_matrix = np.load(f"paper_results/{dataset}_{model_type}_rf_stability_{comparison_type}_angles.npy")
     average_angles_matrix = np.mean(angles_matrix, axis=0)
 
     if model_type == "sae" or model_type == "pca-ae":
         return average_angles_matrix, None
-    elif model_type == "dae":
+    elif model_type == "dev-ae":
         highlighted_non_computable_angles = average_angles_matrix.copy()
 
         for i in range(highlighted_non_computable_angles.shape[0]):
@@ -283,7 +283,7 @@ def create_heatmap(model_type: str, dataset: str = "mnist",
         square=True
     )
 
-    if model_type == "dae":
+    if model_type == "dev-ae":
         cmap_grey = ListedColormap(['grey'])
         sns.heatmap(
             non_computable_cells[:, :],
@@ -320,7 +320,7 @@ def create_heatmap(model_type: str, dataset: str = "mnist",
         ax.set_title(f"Stability of Receptive Fields (AE, {dataset.upper()})", fontsize=28, pad=25)
     elif model_type == "pca-ae":
         ax.set_title(f"Stability of Receptive Fields (PCA-AE, {dataset.upper()})", fontsize=28, pad=25)
-    elif model_type == "dae":
+    elif model_type == "dev-ae":
         ax.set_title(f"Stability of Receptive Fields (Dev-AE, {dataset.upper()})", fontsize=28, pad=25)
     
     ax.set_xlabel("Epoch Comparison", fontsize=24)
@@ -371,7 +371,7 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
     """
     sae_angle_matrix, sae_non_computable = compute_average_angles_matrix('sae', dataset, compare_final_epoch)
     pca_ae_angle_matrix, pca_ae_non_computable = compute_average_angles_matrix('pca-ae', dataset, compare_final_epoch)
-    dae_angle_matrix, dae_non_computable = compute_average_angles_matrix('dae', dataset, compare_final_epoch)
+    dae_angle_matrix, dae_non_computable = compute_average_angles_matrix('dev-ae', dataset, compare_final_epoch)
     
     fig = plt.figure(figsize=(9.399, 1.7), dpi=300)
     
@@ -477,12 +477,10 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
     ax_dae.set_ylabel("")
     
     comparison_type = "vs_final" if compare_final_epoch else "consecutive"
-    plt.savefig(f"Results/figures/png/{dataset}_stability_of_rfs_{comparison_type}.png", 
+    plt.savefig(f"paper_results/figures/pdf/{dataset}_stability_of_rfs_{comparison_type}.pdf", 
+                bbox_inches="tight")
+    plt.savefig(f"paper_results/figures/png/{dataset}_stability_of_rfs_{comparison_type}.png", 
                 bbox_inches="tight", dpi=300)
-    plt.savefig(f"Results/figures/svg/{dataset}_stability_of_rfs_{comparison_type}.svg", 
-                bbox_inches="tight")
-    plt.savefig(f"Results/figures/pdf/{dataset}_stability_of_rfs_{comparison_type}.pdf", 
-                bbox_inches="tight")
     plt.close(fig)
 
 
@@ -508,7 +506,7 @@ def analyze_combined_rf_stability(dataset='mnist', compare_final_epoch=False,
                         num_models=num_models, num_epochs=num_epochs)
     
     # Run DAE analysis
-    analyze_rf_stability(model_type='dae', dataset=dataset, 
+    analyze_rf_stability(model_type='dev-ae', dataset=dataset, 
                         compare_final_epoch=compare_final_epoch,
                         num_models=num_models, num_epochs=num_epochs)
     
@@ -523,8 +521,8 @@ if __name__ == "__main__":
     # analyze_rf_stability("sae", "mnist", compare_final_epoch=True)
     # analyze_rf_stability("dae", "cifar", compare_final_epoch=True)
     
-    analyze_combined_rf_stability("mnist", compare_final_epoch=True, num_models=10)
-    analyze_combined_rf_stability("cifar", compare_final_epoch=True, num_models=10)
+    # analyze_combined_rf_stability("mnist", compare_final_epoch=True, num_models=10)
+    analyze_combined_rf_stability("cifar", compare_final_epoch=False, num_models=2)
     # analyze_combined_rf_stability("mnist", compare_final_epoch=False, num_models=10)
     # analyze_combined_rf_stability("cifar", compare_final_epoch=False, num_models=10)
     # plot_rf_over_time("sae", "mnist", model_idx=0, neuron_idx=0)

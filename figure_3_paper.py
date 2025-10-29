@@ -514,10 +514,10 @@ def plot_neuron_importance(ax, dataset="cifar"):
     all_pca_group = np.array(avg_results['all_pca_ae_group_importance'])
     all_dae_group = np.array(avg_results['all_dae_group_importance'])
 
-    # Normalize each model's run first
-    sae_norm_all = (all_sae_group - all_sae_group.min(axis=1, keepdims=True)) / (all_sae_group.max(axis=1, keepdims=True) - all_sae_group.min(axis=1, keepdims=True))
-    pca_norm_all = (all_pca_group - all_pca_group.min(axis=1, keepdims=True)) / (all_pca_group.max(axis=1, keepdims=True) - all_pca_group.min(axis=1, keepdims=True))
-    dae_norm_all = (all_dae_group - all_dae_group.min(axis=1, keepdims=True)) / (all_dae_group.max(axis=1, keepdims=True) - all_dae_group.min(axis=1, keepdims=True))
+    # Normalize each model's run so that it sums to 1
+    sae_norm_all = all_sae_group / all_sae_group.sum(axis=1, keepdims=True)
+    pca_norm_all = all_pca_group / all_pca_group.sum(axis=1, keepdims=True)
+    dae_norm_all = all_dae_group / all_dae_group.sum(axis=1, keepdims=True)
 
     # Now calculate mean and std dev from the normalized data
     sae_importance_normal = np.mean(sae_norm_all, axis=0)

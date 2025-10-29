@@ -69,7 +69,7 @@ def compute_rf_for_single_model(model_idx: int, model_type: str, dataset: str = 
         else:
             ae.encoder[11].register_forward_hook(amu.layer_hook(activation_dictionary, layer_name))
 
-        loop_size = size_ls[epoch] if model_type == "dae" else MAX_NEURONS
+        loop_size = size_ls[epoch] if model_type == "dev-ae" else MAX_NEURONS
 
         rf_ls = []
         for i in range(loop_size):
@@ -203,7 +203,7 @@ def compute_final_rfs(model_type: str, dataset: str = "mnist",
         else:
             ae.encoder[11].register_forward_hook(amu.layer_hook(activation_dictionary, layer_name))
 
-        loop_size = size_ls[final_epoch] if model_type == "dae" else MAX_NEURONS
+        loop_size = size_ls[final_epoch] if model_type == "dev-ae" else MAX_NEURONS
 
         rf_ls = []
         for i in range(loop_size):
@@ -237,8 +237,8 @@ def compute_final_rfs(model_type: str, dataset: str = "mnist",
 
 
 if __name__ == "__main__":
-    compute_rfs(model_type='sae', dataset='cifar', num_models=2, num_epochs=60)
-    compute_rfs(model_type='pca-ae', dataset='cifar', num_models=2, num_epochs=60)
+    # compute_rfs(model_type='sae', dataset='cifar', num_models=2, num_epochs=60)
+    # compute_rfs(model_type='pca-ae', dataset='cifar', num_models=2, num_epochs=60)
 
     cifar_size_ls = [6] * 6 + [10] * 6 + [17] * 7 + [29] * 7 + [50] * 8 + [85] * 8 + [128] * 18
-    compute_rfs(model_type='dae', dataset='cifar', size_ls=cifar_size_ls, num_models=2, num_epochs=60)
+    compute_rfs(model_type='dev-ae', dataset='cifar', size_ls=cifar_size_ls, num_models=10, num_epochs=60)
