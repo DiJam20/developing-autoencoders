@@ -2,4 +2,6 @@ __pycache__/
 
 data/
 
-Results/paper_results/*.npy
+Results/*
+paper_results/*.npy
+paper_development_notebooks/Results/*

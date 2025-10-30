@@ -246,13 +246,13 @@ def plot_pc_rankings(ax, dataset="cifar"):
 
 def load_and_calculate_pvalues(dataset):
     """
-    Load results and calculate p-values for each noise type.
+    Load results and calculate p-values for each noise type with Bonferroni correction.
     
     Args:
         dataset: Dataset name ('mnist' or 'cifar')
         
     Returns:
-        Dictionary with p-values for each noise type
+        Dictionary with corrected p-values for each noise type
     """
     # Load all individual results (not just averages)
     all_results_file = f"paper_results/{dataset}_all_frequency_classification.npy"
@@ -267,7 +267,9 @@ def load_and_calculate_pvalues(dataset):
     # Calculate p-values for each noise type using arrays of individual measurements
     p_values = {}
 
-    # --- SAE vs DAE ---
+    n_comparisons = 12  # (3 model pairs * 4 noise types)
+
+    # SAE vs DAE
     _, p_values['clean_sae_vs_dae'] = stats.ttest_rel(
         all_results['sae_clean_acc'],
         all_results['dae_clean_acc']
@@ -285,7 +287,7 @@ def load_and_calculate_pvalues(dataset):
         all_results['dae_high_freq_acc']
     )
 
-    # --- SAE vs PCA-AE ---
+    # SAE vs PCA-AE
     _, p_values['clean_sae_vs_pca'] = stats.ttest_rel(
         all_results['sae_clean_acc'],
         all_results['pca_ae_clean_acc']
@@ -303,7 +305,7 @@ def load_and_calculate_pvalues(dataset):
         all_results['pca_ae_high_freq_acc']
     )
 
-    # --- DAE vs PCA-AE ---
+    # DAE vs PCA-AE
     _, p_values['clean_dae_vs_pca'] = stats.ttest_rel(
         all_results['dae_clean_acc'],
         all_results['pca_ae_clean_acc']
@@ -320,13 +322,17 @@ def load_and_calculate_pvalues(dataset):
         all_results['dae_high_freq_acc'],
         all_results['pca_ae_high_freq_acc']
     )
+    
+    # Bonferroni correction
+    p_values_corrected = {key: min(val * n_comparisons, 1.0) for key, val in p_values.items()}
         
-    return p_values
+    return p_values_corrected
 
 
 def add_significance_marker(x1, x2, y_start, p_value, ax):
     """
     Adds a significance marker (bracket with star) between two bars.
+    Uses Bonferroni-corrected p-values.
     """
     if p_value >= 0.05:
         return  # Don't draw for non-significant results

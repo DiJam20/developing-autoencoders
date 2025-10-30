@@ -373,15 +373,16 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
     pca_ae_angle_matrix, pca_ae_non_computable = compute_average_angles_matrix('pca-ae', dataset, compare_final_epoch)
     dae_angle_matrix, dae_non_computable = compute_average_angles_matrix('dev-ae', dataset, compare_final_epoch)
     
-    fig = plt.figure(figsize=(9.399, 1.7), dpi=300)
+    fig = plt.figure(figsize=(3.5, 5.1), dpi=300)
     
-    # Create grid with 4 columns: AE, PCA-AE, Dev-AE, colorbar
-    gs = plt.GridSpec(1, 4, width_ratios=[1, 1, 1, 0.05], wspace=0.25)
+    # Create grid with 3 rows and 2 columns: 3 heatmaps + colorbar in middle right
+    gs = plt.GridSpec(3, 2, width_ratios=[1, 0.05], height_ratios=[1, 1, 1], 
+                     hspace=0.5, wspace=0.2)
     
-    ax_sae = plt.subplot(gs[0])
-    ax_pca_ae = plt.subplot(gs[1])
-    ax_dae = plt.subplot(gs[2])
-    ax_cbar = plt.subplot(gs[3])
+    ax_sae = plt.subplot(gs[0, 0])
+    ax_pca_ae = plt.subplot(gs[1, 0])
+    ax_dae = plt.subplot(gs[2, 0])
+    ax_cbar = plt.subplot(gs[1, 1])  # Middle right position
     
     ax_sae.set_aspect('auto')
     ax_pca_ae.set_aspect('auto')
@@ -459,22 +460,22 @@ def create_combined_rf_stability_heatmaps(dataset='mnist', compare_final_epoch=F
             ax.set_xticks([0.5, mid_epoch - 0.5, max_epochs - 0.5])
             ax.set_xticklabels(["1-2", f"{mid_epoch}-{mid_epoch+1}", f"{max_epochs}-{max_epochs+1}"], 
                              rotation=0)
-        ax.set_xlabel("Epoch")
     
     num_neurons = sae_angle_matrix.shape[0]
     mid_neuron = num_neurons // 2
     
-    ax_sae.set_yticks([0.5, mid_neuron - 0.5, num_neurons - 0.5])
-    ax_sae.set_yticklabels(["1", f"{mid_neuron}", f"{num_neurons}"], rotation=0)
-    ax_sae.set_ylabel("Neuron Index")
+    # All three heatmaps show y-axis labels and ylabel
+    for ax in [ax_sae, ax_pca_ae, ax_dae]:
+        ax.set_yticks([0.5, mid_neuron - 0.5, num_neurons - 0.5])
+        ax.set_yticklabels(["1", f"{mid_neuron}", f"{num_neurons}"], rotation=0)
+        ax.set_ylabel("Neuron Index")
     
-    ax_pca_ae.set_yticks([])
-    ax_pca_ae.set_yticklabels([])
-    ax_pca_ae.set_ylabel("")
-    
-    ax_dae.set_yticks([])
-    ax_dae.set_yticklabels([])
-    ax_dae.set_ylabel("")
+    # Only the bottom heatmap (DAE) shows x-axis label
+    ax_sae.set_xlabel("")
+    ax_sae.set_xticklabels([])
+    ax_pca_ae.set_xlabel("")
+    ax_pca_ae.set_xticklabels([])
+    ax_dae.set_xlabel("Epoch")
     
     comparison_type = "vs_final" if compare_final_epoch else "consecutive"
     plt.savefig(f"paper_results/figures/pdf/{dataset}_stability_of_rfs_{comparison_type}.pdf", 
@@ -521,8 +522,8 @@ if __name__ == "__main__":
     # analyze_rf_stability("sae", "mnist", compare_final_epoch=True)
     # analyze_rf_stability("dae", "cifar", compare_final_epoch=True)
     
-    # analyze_combined_rf_stability("mnist", compare_final_epoch=True, num_models=10)
-    analyze_combined_rf_stability("cifar", compare_final_epoch=False, num_models=2)
+    # analyze_combined_rf_stability("mnist", compare_final_epoch=True, num_models=2)
+    analyze_combined_rf_stability("cifar", compare_final_epoch=True, num_models=2)
     # analyze_combined_rf_stability("mnist", compare_final_epoch=False, num_models=10)
     # analyze_combined_rf_stability("cifar", compare_final_epoch=False, num_models=10)
     # plot_rf_over_time("sae", "mnist", model_idx=0, neuron_idx=0)
