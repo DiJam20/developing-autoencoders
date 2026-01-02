@@ -14,8 +14,8 @@ from solver import (
     initialize_conv_sae_with_pca,
     train_vali_all_epochs_with_bottleneck_freeze,
     dev_train_vali_converge_conv,
-    avg_schedule
 )
+from train_converging_dev_ae import average_schedule_durations as avg_schedule
 
 def get_loaders(batch_size=128, num_workers=6):
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))])
@@ -29,7 +29,7 @@ def main():
     parser.add_argument('--num_models', type=int, default=40, help='Number of runs for AE, PCA-AE, Dev-AE')
     parser.add_argument('--conv_dev_runs', type=int, default=10, help='Number of runs for Conv-Dev-AE')
     parser.add_argument('--epochs', type=int, default=60)
-    parser.add_argument('--save_root', default=os.path.join(os.path.expanduser('~'), 'aiii26/models'))
+    parser.add_argument('--save_root', default='aiii26/models')
     parser.add_argument('--device', default='cuda' if torch.cuda.is_available() else 'cpu')
     args = parser.parse_args()
 
@@ -55,7 +55,6 @@ def main():
     # Dev-AE
     print(f"\n[3/4] Training {args.num_models} Dev-AEs...")
     fixed_sched = [6]*6 + [10]*6 + [17]*7 + [29]*7 + [50]*8 + [85]*8 + [128]*18
-    fixed_sched = fixed_sched[:args.epochs] if len(fixed_sched) > args.epochs else fixed_sched + [128]*(args.epochs-len(fixed_sched))
     
     for i in range(args.num_models):
         path = os.path.join(args.save_root, 'dev_ae', str(i))
