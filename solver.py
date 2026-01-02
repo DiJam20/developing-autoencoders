@@ -26,7 +26,7 @@ def train(model,train_loader,optimizer,epoch,device):
     model.train()
     train_loss = 0
     
-    pbar = tqdm(enumerate(train_loader),total=len(train_loader))
+    pbar = tqdm(enumerate(train_loader),total=len(train_loader),leave=True)
     all_losses = []
     for batch_idx, (data, target) in pbar:
         data = Variable(data)
@@ -405,8 +405,8 @@ def l_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,op
             ae =LinearAutoencoder(hyperparam['n_input'],new_n_hidden_ls,hyperparam['n_layers'])
 
         else:
-            ae = l_develope_AE(new_n_hidden_ls,hyperparam,save_path=save_path,epoch=epoch,manner=manner)
-            optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
+            ae = l_develope_AE(new_n_hidden_ls,hyperparam, save_path=save_path, epoch=epoch, manner=manner)
+            optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1)
             
         train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
         vali_loss,_,_ = test(ae,vali_loader,device)
@@ -452,7 +452,7 @@ def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,o
             else:
                 ae = nl_develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
 
-            optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+            optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1)
         
         train_loss,train_loss_per_batch = train(ae,train_loader,optimizer,epoch,device)
         vali_loss,_,_ = test(ae,vali_loader,device)
@@ -493,7 +493,7 @@ def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,o
 # 				ae = LinearAutoencoder(hyperparam['n_input'], new_n_hidden_ls, hyperparam['n_layers'])
 # 			else:
 # 				ae = develope_AE(new_n_hidden_ls, hyperparam, save_path=save_path, epoch=epoch, manner=manner)
-# 				optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+# 				optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1)
 
 # 			train_loss, train_loss_per_batch = train(ae, train_loader, optimizer, epoch, device)
 # 			vali_loss, _, _ = test(ae, vali_loader, device)
@@ -524,7 +524,7 @@ def nl_dev_train_vali_all_epochs(model,size_ls,manner,train_loader,vali_loader,o
 # 	return train_losses, vali_losses
 
 
-def dev_train_vali_converge_conv(size_ls, manner, train_loader, vali_loader, device, save_path=None):
+def dev_train_vali_converge_conv(size_ls, manner, train_loader, vali_loader, device, save_path=None, max_epochs=60):
     if save_path is None:
         save_path = './'
     else:
@@ -537,20 +537,28 @@ def dev_train_vali_converge_conv(size_ls, manner, train_loader, vali_loader, dev
     new_size_ls = []
 
     for i, size in enumerate(size_ls):
+        if epoch >= max_epochs:
+            break
+        
+        if i == len(size_ls) - 1:
+            new_size_ls.append(size)
+            break
 
         converged = False
         train_loss_old = float('inf')
 
         while not converged:
+            if epoch >= max_epochs:
+                break
             print(f"Epoch {epoch}, Bottleneck Size {size}")
             new_size_ls.append(size)
 
             if epoch == 0:
                 ae = ConvAutoencoder(size)
-                optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+                optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1)
             else:
                 ae = develope_convAE(size, save_path=save_path, epoch=epoch, manner=manner)
-                optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1, momentum=0.9)
+                optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1)
 
             ae.to(device)
 
@@ -598,7 +606,7 @@ def train_conv(model,train_loader,optimizer,epoch,device='cpu'):
     model.train()
     train_loss = 0
 
-    pbar = tqdm(enumerate(train_loader),total=len(train_loader))
+    pbar = tqdm(enumerate(train_loader),total=len(train_loader),leave=True)
     for batch_idx, data in pbar:
         # Handle case where dataloader returns only data (no targets)
         if isinstance(data, (list, tuple)):
@@ -683,11 +691,13 @@ def dev_train_vali_all_epochs_conv(model,size_ls,train_loader,vali_loader,optimi
         if epoch == 0:
             ae = ConvAutoencoder(size_each_epoch[epoch])
         else:
-            ae = develope_convAE(new_size,save_path=save_path,epoch=epoch,manner=manner)
-            optimizer = torch.optim.SGD(ae.parameters(),lr=1e-1,momentum=0.9)
+            ae = develope_convAE(new_size, save_path=save_path, epoch=epoch, manner=manner)
+            optimizer = torch.optim.SGD(ae.parameters(), lr=1e-1)
+
+        ae = ae.to(device)
             
-        train_loss = train_conv(ae,train_loader,optimizer,epoch,device=device)
-        vali_loss,_,_ = test_conv(ae,vali_loader,device=device)
+        train_loss = train_conv(ae, train_loader, optimizer, epoch, device=device)
+        vali_loss,_,_ = test_conv(ae, vali_loader, device=device)
         train_losses.append(train_loss)
         vali_losses.append(vali_loss)
 
@@ -709,7 +719,6 @@ def train_vali_all_epochs_with_bottleneck_freeze(
     total_epochs=60,
     freeze_epochs=10,
     lr=0.1,
-    momentum=0.9,
 ):
     # Freeze the encoder -> bottleneck layer
     frozen_params = list(model.encoder[-1].parameters())
@@ -718,7 +727,7 @@ def train_vali_all_epochs_with_bottleneck_freeze(
 
     # Build optimizer excluding frozen params
     trainable_params = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.SGD(trainable_params, lr=lr, momentum=momentum)
+    optimizer = torch.optim.SGD(trainable_params, lr=lr)
 
     # Train for frozen_epochs
     train_loss_1, vali_loss_1 = train_vali_all_epochs_conv(
@@ -737,7 +746,7 @@ def train_vali_all_epochs_with_bottleneck_freeze(
         p.requires_grad = True
 
     # Add unfrozen params to the optimizer
-    optimizer.add_param_group({'params': frozen_params, 'lr': lr, 'momentum': momentum})
+    optimizer.add_param_group({'params': frozen_params, 'lr': lr})
 
     # Train remaining epochs
     train_loss_2, vali_loss_2 = train_vali_all_epochs_conv(
@@ -804,7 +813,7 @@ def initialize_with_feature_pca(model, dataloader, device, n_components=128):
 def initialize_conv_sae_with_pca(latent_dim, device, train_loader):
     sae_model = ConvAutoencoder(latent_dim=latent_dim).to(device)
     initialize_with_feature_pca(sae_model, train_loader, device, n_components=latent_dim)
-    sae_optimizer = torch.optim.SGD(sae_model.parameters(), lr=0.1, momentum=0.9)
+    sae_optimizer = torch.optim.SGD(sae_model.parameters(), lr=0.1)
     return sae_model, sae_optimizer
 
 
@@ -813,7 +822,7 @@ def train_vae(model,train_loader,optimizer,epoch):
     model.train()
     train_loss = 0
 
-    pbar = tqdm(enumerate(train_loader),total=len(train_loader))
+    pbar = tqdm(enumerate(train_loader),total=len(train_loader),leave=True)
     for batch_idx, (data, target) in pbar:
         data = Variable(data)
         optimizer.zero_grad()
@@ -949,7 +958,7 @@ def dev_train_vali_all_epochs_dSprite(model, size_ls, train_loader, vali_loader,
                 ae = develope_dSpriteAE(new_size, save_path=save_path, epoch=epoch, manner=manner)
                 ae = ae.to(device)
             
-            optimizer = torch.optim.SGD(ae.parameters(), lr=0.1, momentum=0.9)
+            optimizer = torch.optim.SGD(ae.parameters(), lr=0.1)
         
         train_loss = train_conv(ae, train_loader, optimizer, epoch, device=device)
         vali_loss, _, _ = test_conv(ae, vali_loader, device=device)

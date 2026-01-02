@@ -97,7 +97,7 @@ def participation_ratio(activation_matrix):
     return dimensionality
 
 
-def calculate_dimensionality_for_single_model(model_idx, model_type, test_images, dataset, size_ls, num_epochs, base_path):
+def calculate_dimensionality_for_single_model(model_idx, model_type, test_images, dataset, size_ls, num_epochs, base_path, final_epoch_only=False):
     if dataset.lower() == 'mnist':
         base_path = f"{base_path}mnist_models/{model_type}/{model_idx}"
         loader_function = load_model
@@ -108,7 +108,8 @@ def calculate_dimensionality_for_single_model(model_idx, model_type, test_images
     dimensionality_over_time = []
     
     # Calculate dimensionality for each epoch
-    for epoch in tqdm(range(num_epochs), desc=f"Model {model_idx} epochs", leave=False):
+    epoch_range = [num_epochs - 1] if final_epoch_only else range(num_epochs)
+    for epoch in tqdm(epoch_range, desc=f"Model {model_idx} epochs", leave=False):
         # Load model for this epoch
         ae = loader_function(base_path, model_type=model_type, epoch=epoch, size_ls=size_ls)
         
@@ -137,8 +138,9 @@ def calculate_dimensionality_for_single_model(model_idx, model_type, test_images
     return dimensionality_over_time
 
 
-def compute_dimensionality_matrix(model_type, dataset='mnist', size_ls=None, num_models=10, num_epochs=60, base_path='/home/david/'):
-    result_file = f"paper_results/{dataset}_{model_type}_dimensionality.npy"
+def compute_dimensionality_matrix(model_type, dataset='mnist', size_ls=None, num_models=10, num_epochs=60, base_path='/home/david/', final_epoch_only=False):
+    suffix = "_final_epoch" if final_epoch_only else ""
+    result_file = f"paper_results/{dataset}_{model_type}_dimensionality{suffix}.npy"
 
     # Check if results already exist to avoid recomputation
     if os.path.exists(result_file):
@@ -152,7 +154,7 @@ def compute_dimensionality_matrix(model_type, dataset='mnist', size_ls=None, num
     
     all_angles = []
     for idx in range(num_models):
-        result = calculate_dimensionality_for_single_model(idx, model_type, test_images, dataset, size_ls, num_epochs, base_path)
+        result = calculate_dimensionality_for_single_model(idx, model_type, test_images, dataset, size_ls, num_epochs, base_path, final_epoch_only)
         all_angles.append(result)
 
     np.save(result_file, all_angles)
@@ -198,12 +200,12 @@ def plot_dimensionality_comparison(dataset):
     plt.close()
 
 
-def run_dimensionality_analysis(dataset, size_ls, num_models, num_epochs, base_path):
+def run_dimensionality_analysis(dataset, size_ls, num_models, num_epochs, base_path, final_epoch_only=False):
     print(f"Running dimensionality analysis for SAE on {dataset}...")
-    compute_dimensionality_matrix('sae', dataset, size_ls, num_models, num_epochs, base_path)
+    compute_dimensionality_matrix('sae', dataset, size_ls, num_models, num_epochs, base_path, final_epoch_only)
     
     print(f"Running dimensionality analysis for DAE on {dataset}...")
-    compute_dimensionality_matrix('dae', dataset, size_ls, num_models, num_epochs, base_path)
+    compute_dimensionality_matrix('dae', dataset, size_ls, num_models, num_epochs, base_path, final_epoch_only)
 
     plot_dimensionality_comparison(dataset)
     
@@ -223,15 +225,10 @@ if __name__ == "__main__":
             32, 32, 32, 32, 32, 32,
             32, 32, 32, 32, 32, 32,]
     
-    cifar_size_ls = [6,   6,   6,   6,   6,   6,    # 6
-					10,  10,  10,  10,  10,  10,    # 6
-					16,  16,  16,  16,  16,  16,    # 6
-					28,  28,  28,  28,  28,  28,    # 6
-					48,  48,  48,  48,  48,  48,  48,  48, 48, # 9
-					90,  90,  90,  90,  90,  90,  90,  90,  90,  90, #10
-					128, 128, 128, 128, 128, 128, 128, 128, 128, 128,
-					128, 128, 128, 128, 128, 128, 128 # 17
-					]
+    cifar_size_ls = [6] * 6 + [10] * 6 + [17] * 7 + [29] * 7 + [50] * 8 + [85] * 8 + [128] * 18
     
-    run_dimensionality_analysis('mnist', mnist_size_ls, num_models=40, num_epochs=60, base_path=base_path)
-    run_dimensionality_analysis('cifar', cifar_size_ls, num_models=10, num_epochs=60, base_path=base_path)
+    # run_dimensionality_analysis('mnist', mnist_size_ls, num_models=40, num_epochs=60, base_path=base_path, final_epoch_only=False)
+    # run_dimensionality_analysis('cifar', cifar_size_ls, num_models=20, num_epochs=60, base_path=base_path, final_epoch_only=True)
+
+    # compute_dimensionality_matrix('sae', 'cifar', cifar_size_ls, num_models=20, num_epochs=60, base_path=base_path, final_epoch_only=True)    
+    compute_dimensionality_matrix('pca-ae', 'cifar', cifar_size_ls, num_models=20, num_epochs=60, base_path=base_path, final_epoch_only=True)
